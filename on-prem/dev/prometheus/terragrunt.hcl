@@ -16,15 +16,18 @@ inputs = {
   prometheus_ingress = {
     host = "traefik.prometheus.local.com"
     prefix = "/"
+    prefix_type = "Prefix"
   }
 
   alertmanager_ingress = {
     host = "traefik.alertmanager.local.com"
     prefix = "/"
+    prefix_type = "Prefix"
   }
 
   grafana_ingress = {
     host = "traefik.grafana.local.com"
     prefix = "/"
+    prefix_type = "Prefix"
   }
 }
