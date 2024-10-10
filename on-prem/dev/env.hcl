@@ -2,4 +2,9 @@
 # configure the remote state bucket and pass forward to the child modules as inputs.
 locals {
   environment = "dev"
+
+  secrets = {
+    jenkinsUsername      = "admin"
+    jenkinsPassword      = get_env("JENKINS_PASSWORD", "admin")
+  }
 }

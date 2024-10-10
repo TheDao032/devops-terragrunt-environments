@@ -1,4 +1,7 @@
 locals {
+  environment_vars = read_terragrunt_config(find_in_parent_folders("env.hcl"))
+  environment      = local.environment_vars.locals.environment
+  secrets          = local.environment_vars.locals.secrets
 }
 
 terraform {
@@ -17,14 +20,17 @@ inputs = {
   parameters = {
     jenkins_hostname = "traefik.jenkins.local.com"
     jenkins_url      = "http://traefik.jenkins.local.com/"
-    jenkins_username = "admin"
-    jenkins_password = "admin"
+    jenkins_username = local.secrets.jenkinsUsername
+    jenkins_password = local.secrets.jenkinsPassword
   }
 
   jenkins_plugins = {
-    parameterized-scheduler = "262.v00f3d90585cc"
-    github-checks           = "554.vb_ee03a_000f65"
-    thinBackup              = "1.19"
-    git-parameter           = "0.9.19"
+    blueocean-bitbucket-pipeline           = "1.27.16"
+    bitbucket-push-and-pull-request        = "3.1.1"
+    atlassian-bitbucket-server-integration = "4.1.0"
+    parameterized-scheduler                = "262.v00f3d90585cc"
+    github-checks                          = "554.vb_ee03a_000f65"
+    thinBackup                             = "1.19"
+    git-parameter                          = "0.9.19"
   }
 }
