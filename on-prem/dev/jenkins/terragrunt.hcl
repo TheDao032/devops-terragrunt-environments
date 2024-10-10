@@ -28,9 +28,9 @@ inputs = {
     blueocean-bitbucket-pipeline           = "1.27.16"
     bitbucket-push-and-pull-request        = "3.1.1"
     atlassian-bitbucket-server-integration = "4.1.0"
-    parameterized-scheduler                = "262.v00f3d90585cc"
-    github-checks                          = "554.vb_ee03a_000f65"
-    thinBackup                             = "1.19"
+    parameterized-scheduler                = "277.v61a_4b_a_49a_c5c"
+    github-checks                          = "589.v845136f916cd"
+    thinBackup                             = "2.1.1"
     git-parameter                          = "0.9.19"
   }
 }
