@@ -15,6 +15,7 @@ inputs = {
   jenkins_image_tag = "2.479-jdk17"
 
   parameters = {
+    jenkins_hostname = "traefik.jenkins.local.com"
     jenkins_url      = "http://traefik.jenkins.local.com/"
     jenkins_username = "admin"
     jenkins_password = "admin"
