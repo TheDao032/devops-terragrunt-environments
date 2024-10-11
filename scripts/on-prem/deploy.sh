@@ -7,19 +7,17 @@ set -euo pipefail
 
 export ENVIRONMENT=${1}
 export LOCATION=${2}
-export CLUSTER_HOST=${3}
-export CLUSTER_CLIENT_KEY=${4}
-export CLUSTER_CLIENT_CRT=${5}
-export CLUSTER_CLIENT_CA_CRT=${6}
-export SERVER_TOKEN=${7}
+export KUBE_HOST=${3}
+export KUBE_CLIENT_KEY=${4}
+export KUBE_CLIENT_CRT=${5}
+export KUBE_CLIENT_CA_CRT=${6}
+export KUBE_TOKEN=${7}
 
-export JENKINS_USERNAME=${8}
-export JENKINS_PASSWORD=${9}
+export JENKINS_PASSWORD=${8}
 
+APPLY_LOG_FILE_NAME=${9:-apply-${ENVIRONMENT}.log}
 
-APPLY_LOG_FILE_NAME=${10:-apply-${ENVIRONMENT}.log}
-
-# Run plan all and display output both to terminal and the log file temp.log
+# Run apply all and display output both to terminal and the log file temp.log
 cd ${LOCATION}/${ENVIRONMENT}
 
 terragrunt run-all apply -auto-approve -no-color --terragrunt-non-interactive --terragrunt-include-external-dependencies 2>&1 | tee apply.log

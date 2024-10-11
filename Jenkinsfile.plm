@@ -1,0 +1,49 @@
+pipeline {
+    agent {
+      label 'k3s-agent'
+    }
+    environment {
+        LOCATION = 'on-prem' // Set LOCATION as 'on-prem'
+        ENVIRONMENT = "${env.GIT_BRANCH}" // Dynamically get the Git branch
+        KUBE_HOST = credentials('cluster-endpoint')
+        KUBE_CLIENT_KEY = credentials('client-key') // Store in Jenkins credentials
+        KUBE_CLIENT_CRT = credentials('client-crt') // Store in Jenkins credentials
+        KUBE_CA_CRT = credentials('client-ca-crt') // Store in Jenkins credentials
+
+        JENKINS_PASSWORD = credentials('jenkins-password')
+    }
+    stages {
+        stage('Terragrunt build') {
+            steps {
+                script {
+                    sh '''
+                    cd terragrunt-environments
+                    scripts/on-prem/build.sh ${ENVIRONMENT} ${LOCATION} ${KUBE_HOST} ${KUBE_CLIENT_KEY} ${KUBE_CLIENT_CRT} ${KUBE_CLIENT_CA_CRT} ${KUBE_TOKEN} ${JENKINS_PASSWORD}
+                    '''
+                }
+            }
+        }
+        stage('Terragrunt deploy') {
+            steps {
+                input(message: 'Proceed with Terragrunt apply?') // Optional for manual approval
+                script {
+                    sh '''
+                    cd terragrunt-environments
+                    scripts/on-prem/deploy.sh ${ENVIRONMENT} ${LOCATION} ${KUBE_HOST} ${KUBE_CLIENT_KEY} ${KUBE_CLIENT_CRT} ${KUBE_CLIENT_CA_CRT} ${KUBE_TOKEN} ${JENKINS_PASSWORD}
+                    '''
+                }
+            }
+        }
+    }
+
+    // post {
+    //     always {
+    //         script {
+    //             sh '''
+    //             cd terragrunt-environments
+    //             scripts/on-prem/deploy.sh ${ENVIRONMENT} ${LOCATION} ${KUBE_HOST} ${KUBE_CLIENT_KEY} ${KUBE_CLIENT_CRT} ${KUBE_CLIENT_CA_CRT} ${KUBE_TOKEN} ${JENKINS_PASSWORD}
+    //             '''
+    //         }
+    //     }
+    // }
+}

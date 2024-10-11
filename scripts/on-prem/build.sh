@@ -7,19 +7,18 @@ set -euo pipefail
 
 export ENVIRONMENT=${1}
 export LOCATION=${2}
-export CLUSTER_HOST=${3}
-export CLUSTER_CLIENT_KEY=${4}
-export CLUSTER_CLIENT_CRT=${5}
-export CLUSTER_CLIENT_CA_CRT=${6}
-export SERVER_TOKEN=${7}
+export KUBE_HOST=${3}
+export KUBE_CLIENT_KEY=${4}
+export KUBE_CLIENT_CRT=${5}
+export KUBE_CLIENT_CA_CRT=${6}
+export KUBE_TOKEN=${7}
 
-export JENKINS_USERNAME=${8}
-export JENKINS_PASSWORD=${9}
+export JENKINS_PASSWORD=${8}
 
 
-INIT_LOG_FILE_NAME=${10:-init-${ENVIRONMENT}.log}
-VALIDATE_LOG_FILE_NAME=${11:-validate-${ENVIRONMENT}.log}
-PLAN_LOG_FILE_NAME=${12:-plan-${ENVIRONMENT}.log}
+INIT_LOG_FILE_NAME=${9:-"init-${ENVIRONMENT}.log"}
+VALIDATE_LOG_FILE_NAME=${10:-"validate-${ENVIRONMENT}.log"}
+PLAN_LOG_FILE_NAME=${11:-"plan-${ENVIRONMENT}.log"}
 
 # Run plan all and display output both to terminal and the log file temp.log
 cd ${LOCATION}/${ENVIRONMENT}
