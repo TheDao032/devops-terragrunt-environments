@@ -8,8 +8,8 @@ pipeline {
         KUBE_HOST = credentials('cluster-endpoint')
         KUBE_CLIENT_KEY = credentials('client-key') // Store in Jenkins credentials
         KUBE_CLIENT_CRT = credentials('client-crt') // Store in Jenkins credentials
-        KUBE_CA_CRT = credentials('client-ca-crt') // Store in Jenkins credentials
-
+        KUBE_CLIENT_CA_CRT = credentials('client-ca-crt') // Store in Jenkins credentials
+        KUBE_TOKEN = credentials('client-token')
         JENKINS_PASSWORD = credentials('jenkins-password')
     }
     stages {
