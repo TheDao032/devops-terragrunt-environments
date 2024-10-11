@@ -29,14 +29,18 @@ pipeline {
         stage('Terragrunt Init') {
             steps {
                 script {
-                    sh 'cd ${LOCATION}/${ENVIRONMENT} && terragrunt run-all init'
+                    sh '''
+                    cd ${LOCATION}/${ENVIRONMENT} && terragrunt run-all init
+                    '''
                 }
             }
         }
         stage('Terragrunt Plan') {
             steps {
                 script {
-                    sh 'cd ${LOCATION}/${ENVIRONMENT} && terragrunt run-all plan'
+                    sh '''
+                    cd ${LOCATION}/${ENVIRONMENT} && terragrunt run-all plan
+                    '''
                 }
             }
         }
@@ -44,7 +48,9 @@ pipeline {
             steps {
                 input(message: 'Proceed with Terragrunt apply?') // Optional for manual approval
                 script {
-                    sh 'cd ${LOCATION}/${ENVIRONMENT} && terragrunt run-all apply -auto-approve -no-color --terragrunt-non-interactive --terragrunt-include-external-dependencies'
+                    sh '''
+                    cd ${LOCATION}/${ENVIRONMENT} && terragrunt run-all apply -auto-approve -no-color --terragrunt-non-interactive --terragrunt-include-external-dependencies
+                    '''
                 }
             }
         }
