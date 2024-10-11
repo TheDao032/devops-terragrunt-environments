@@ -3,6 +3,8 @@ pipeline {
       label 'k3s-agent'
     }
     environment {
+        LOCATION = 'on-prem' // Set LOCATION as 'on-prem'
+        ENVIRONMENT = "${env.GIT_BRANCH}" // Dynamically get the Git branch
         KUBE_HOST = credentials('cluster-endpoint')
         KUBE_CLIENT_KEY = credentials('client-key') // Store in Jenkins credentials
         KUBE_CLIENT_CRT = credentials('client-crt') // Store in Jenkins credentials
