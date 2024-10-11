@@ -3,10 +3,13 @@ pipeline {
       label 'k3s-agent'
     }
     environment {
+        LOCATION = 'terragrunt-environments/on-prem' // Set LOCATION as 'on-prem'
+        ENVIRONMENT = "${env.GIT_BRANCH}" // Dynamically get the Git branch
         KUBE_HOST = credentials('cluster-endpoint')
         KUBE_CLIENT_KEY = credentials('client-key') // Store in Jenkins credentials
         KUBE_CLIENT_CRT = credentials('client-crt') // Store in Jenkins credentials
         KUBE_CA_CRT = credentials('client-ca-crt') // Store in Jenkins credentials
+        KUBECONFIG = "home/appadm/.kube/config"
     }
     stages {
         stage('Setup kubectl') {
@@ -44,16 +47,16 @@ pipeline {
                 }
             }
         }
-        stage('Terragrunt Apply') {
-            steps {
-                input(message: 'Proceed with Terragrunt apply?') // Optional for manual approval
-                script {
-                    sh '''
-                    cd ${LOCATION}/${ENVIRONMENT} && terragrunt run-all apply -auto-approve -no-color --terragrunt-non-interactive --terragrunt-include-external-dependencies
-                    '''
-                }
-            }
-        }
+        // stage('Terragrunt Apply') {
+        //     steps {
+        //         input(message: 'Proceed with Terragrunt apply?') // Optional for manual approval
+        //         script {
+        //             sh '''
+        //             cd ${LOCATION}/${ENVIRONMENT} && terragrunt run-all apply -auto-approve -no-color --terragrunt-non-interactive --terragrunt-include-external-dependencies
+        //             '''
+        //         }
+        //     }
+        // }
     }
     // post {
     //     always {
