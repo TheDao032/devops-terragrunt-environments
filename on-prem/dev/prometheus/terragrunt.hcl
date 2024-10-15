@@ -12,6 +12,10 @@ include {
 
 inputs = {
   chart_version = "65.1.0"
+  namespace = "monitoring"
+  helm_repository = "https://prometheus-community.github.io/helm-charts"
+  helm_release_name = "prometheus-community"
+  helm_release_chart = "kube-prometheus-stack"
 
   prometheus_ingress = {
     host = "traefik.prometheus.local.com"
