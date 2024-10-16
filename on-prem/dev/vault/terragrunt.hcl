@@ -33,7 +33,7 @@ inputs = {
     }
   }
   ui_conf = {
-    enabbled = true
+    enabled = true
   }
   vault_hosts = [
     {
