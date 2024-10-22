@@ -16,6 +16,11 @@ locals {
   cluster_ca_certificate = local.kube_config_vars.locals.cluster_ca_certificate
   token                  = local.kube_config_vars.locals.token
 
+  # Vault config vars
+  vault_config_vars = read_terragrunt_config(find_in_parent_folders("vault-config.hcl"))
+  vault_address     = local.vault_config_vars.locals.address
+  vault_token       = local.vault_config_vars.locals.token
+
   # Backend global vars
   backend_vars      = read_terragrunt_config(find_in_parent_folders("backend.hcl"))
   backend_hostname  = local.backend_vars.locals.hostname
@@ -51,6 +56,10 @@ generate "versions" {
         kubectl = {
           source  = "gavinbunney/kubectl"
           version = "~> 1.14.0"
+        }
+        vault = {
+          source = "hashicorp/vault"
+          version = "~> 4.4.0"
         }
       }
     }
@@ -88,6 +97,12 @@ generate "provider" {
       client_certificate     = base64decode("${local.client_certificate}")
       cluster_ca_certificate = base64decode("${local.cluster_ca_certificate}")
       token                  = "${local.token}"
+    }
+
+    provider "vault" {
+      address = "${local.vault_address}"
+      token   = "${local.vault_token}"
+      skip_tls_verify = true
     }
 
     provider "tls" {}

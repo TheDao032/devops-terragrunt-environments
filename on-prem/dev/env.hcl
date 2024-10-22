@@ -4,7 +4,9 @@ locals {
   environment = "dev"
 
   secrets = {
-    jenkinsUsername      = "admin"
-    jenkinsPassword      = get_env("JENKINS_PASSWORD", "admin")
+    jenkins = {
+      jenkinsUsername      = "admin"
+      jenkinsPassword      = "{ _RANDOM_ = 18 }"
+    }
   }
 }

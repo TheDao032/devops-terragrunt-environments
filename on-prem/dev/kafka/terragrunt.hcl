@@ -30,7 +30,7 @@ inputs = {
   }
 
   broker_conf = {
-    replica_count = 2
+    replica_count = 1
     hpa_active    = true
     mount_path    = "/bitnami/kafka/broker"
     min_replicas  = 1
