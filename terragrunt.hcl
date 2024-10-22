@@ -63,8 +63,6 @@ generate "provider" {
   if_exists = "overwrite_terragrunt"
   contents  = <<EOF
     provider "kubernetes" {
-      apply_retry_count      = 1
-      load_config_file       = false
       host                   = "${local.kube_host}"
       client_key             = base64decode("${local.client_key}")
       client_certificate     = base64decode("${local.client_certificate}")
@@ -91,6 +89,8 @@ generate "provider" {
       cluster_ca_certificate = base64decode("${local.cluster_ca_certificate}")
       token                  = "${local.token}"
     }
+
+    provider "tls" {}
 EOF
 }
 
