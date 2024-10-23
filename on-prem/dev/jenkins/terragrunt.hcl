@@ -13,12 +13,9 @@
 #   config_path = "../vault-secrets"
 #   mock_outputs = {
 #     output = {
-#       key = "value"
+#       jenkinsUsername = "value"
+#       jenkinsPassword = "value"
 #     }
-#     # public_subnets = ["name1","name2"]
-#     # private_subnets = ["name1","name2"]
-#     # eks_securitygroup = "eks_security_group"
-#     # eks_node_securitygroup = "eks_node_security_group"
 #   }
 #   mock_outputs_merge_strategy_with_state = "shallow"
 # }
