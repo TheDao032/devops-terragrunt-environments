@@ -4,9 +4,9 @@ locals {
   environment = "dev"
 
   secrets = {
-    jenkins = {
-      jenkinsUsername      = "admin"
-      jenkinsPassword      = "{ _RANDOM_ = 18 }"
-    }
+    jenkinsUsername = "admin"
+    jenkinsPassword = "{ _RANDOM_ = 18 }"
+    grafanaUsername = "admin"
+    grafanaPassword = "{ _RANDOM_ = 18 }"
   }
 }

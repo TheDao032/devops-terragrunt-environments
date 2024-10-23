@@ -30,7 +30,7 @@ include {
 inputs = {
   chart_version = "5.7.3"
   image_tag = "2.479-jdk17"
-  namespace = "ci-cd"
+  namespace = "jenkins"
   helm_repository = "https://charts.jenkins.io/"
   helm_release_name = "jenkins"
   helm_release_chart = "jenkins"
@@ -38,13 +38,17 @@ inputs = {
   parameters = {
     jenkins_hostname = "traefik.jenkins.local.com"
     jenkins_url      = "http://traefik.jenkins.local.com/"
-    jenkins_username = dependency.secrets.outputs.output["jenkinsUsername"]
-    jenkins_password = dependency.secrets.outputs.output["jenkinsPassword"]
+    jenkins_username = dependency.vault-secrets.outputs.output["jenkinsUsername"]
+    jenkins_password = dependency.vault-secrets.outputs.output["jenkinsPassword"]
   }
 
-  secrets = dependency.secrets.outputs.output
+  secrets = dependency.vault-secrets.outputs.output
 
   jenkins_plugins = {
+    kubernetes                             = "4295.v7fa_01b_309c95"
+    workflow-aggregator                    = "600.vb_57cdd26fdd7"
+    git                                    = "5.5.2"
+    configuration-as-code                  = "1850.va_a_8c31d3158b_"
     blueocean-bitbucket-pipeline           = "1.27.16"
     bitbucket-push-and-pull-request        = "3.1.1"
     atlassian-bitbucket-server-integration = "4.1.0"
