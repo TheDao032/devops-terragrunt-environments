@@ -9,6 +9,16 @@ terraform {
   # source = "git::git@github.com:TheDao032/devops-terraform-modules.git//on-prem/kafka?ref=${local.environment}"
 }
 
+dependency "vault-secrets" {
+  config_path = "../vault-secrets"
+  mock_outputs = {
+    output = {
+      kafkaClientPassword = "value"
+    }
+  }
+  mock_outputs_merge_strategy_with_state = "shallow"
+}
+
 include {
   path = find_in_parent_folders()
 }
@@ -35,5 +45,11 @@ inputs = {
     mount_path    = "/bitnami/kafka/broker"
     min_replicas  = 1
     max_replicas  = 3
+  }
+
+  sasl_conf = {
+    client = {
+      password: dependency.vault-secrets.outputs.output["kafkaClientPassword"]
+    }
   }
 }

@@ -36,6 +36,9 @@ terraform.rc
 .terragrunt-cache
 .terraform.lock.hcl
 
+# Ignore terragrunt debug files
+terragrunt-debug.tfvars.json
+
 # Ignore OpenVPN configurations
 *.ovpn
 
