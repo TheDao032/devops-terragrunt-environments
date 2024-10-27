@@ -1,4 +1,7 @@
 pipeline {
+    parameters {
+        choice(name: 'PLATFORM_FILTER', choices: ['all', 'linux', 'windows', 'mac'], description: 'Run on specific platform')
+    }
     agent {
       label 'k3s-agent'
     }
@@ -10,14 +13,14 @@ pipeline {
         TERRAFORM_MODULE = ${TERRAFORM_MODULE}
     }
     stages {
-        input(
-          message: 'Please choose an option:',
-          parameters: [
-              choice(choices: 'jenkins\nkafka\nprometheus\nvault-secrets',
-                     description: 'Select one of the options',
-                     name: 'UserChoice')
-          ]
-        )
+        // input(
+        //   message: 'Please choose an option:',
+        //   parameters: [
+        //       choice(choices: 'jenkins\nkafka\nprometheus\nvault-secrets',
+        //              description: 'Select one of the options',
+        //              name: 'UserChoice')
+        //   ]
+        // )
         stage('Terragrunt build') {
             steps {
                 script {
