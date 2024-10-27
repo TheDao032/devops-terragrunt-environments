@@ -43,7 +43,6 @@ pipeline {
     ENVIRONMENT = "${env.GIT_BRANCH}" // Dynamically get the Git branch
     VAULT_ADDR = credentials('vault-cluster-addr')
     VAULT_TOKEN = credentials('vault-token')
-    TERRAFORM_MODULE = ${TERRAFORM_MODULE}
   }
   stages {
     // stage('Setup kubectl') {
@@ -65,36 +64,48 @@ pipeline {
     //         }
     //     }
     // }
-    stage('Terragrunt build') {
-        steps {
-            script {
-                sh '''
-                cd terragrunt-environments
-
-                if [[ -n "${TERRAFORM_MODULE}" ]]; then
-                  deployments/${LOCATION}/build.sh ${ENVIRONMENT} ${params.terraform_module}
-                else
-                  deployments/${LOCATION}/build.sh ${ENVIRONMENT}
-                fi
-                '''
-            }
+    // stage('Terragrunt build') {
+    //     steps {
+    //         script {
+    //             sh '''
+    //             cd terragrunt-environments
+    //
+    //             if [[ -n "${TERRAFORM_MODULE}" ]]; then
+    //               deployments/${LOCATION}/build.sh ${ENVIRONMENT} ${params.terraform_module}
+    //             else
+    //               deployments/${LOCATION}/build.sh ${ENVIRONMENT}
+    //             fi
+    //             '''
+    //         }
+    //     }
+    // }
+    // stage('Terragrunt deploy') {
+    //     steps {
+    //         input(message: 'Proceed with Terragrunt apply?') // Optional for manual approval
+    //         script {
+    //             sh '''
+    //             cd terragrunt-environments
+    //
+    //             if [[ -n "${TERRAFORM_MODULE}" ]]; then
+    //               deployments/${LOCATION}/deploy.sh ${ENVIRONMENT} ${params.terraform_module}
+    //             else
+    //               deployments/${LOCATION}/deploy.sh ${ENVIRONMENT}
+    //             fi
+    //             '''
+    //         }
+    //     }
+    // }
+    stage('Test') {
+      steps {
+        script {
+          node {
+              echo 'Testing on test-agent...'
+              echo '${VAULT_ADDR}'
+              echo '${VAULT_TOKEN}'
+              // Your test logic here
+          }
         }
-    }
-    stage('Terragrunt deploy') {
-        steps {
-            input(message: 'Proceed with Terragrunt apply?') // Optional for manual approval
-            script {
-                sh '''
-                cd terragrunt-environments
-
-                if [[ -n "${TERRAFORM_MODULE}" ]]; then
-                  deployments/${LOCATION}/deploy.sh ${ENVIRONMENT} ${params.terraform_module}
-                else
-                  deployments/${LOCATION}/deploy.sh ${ENVIRONMENT}
-                fi
-                '''
-            }
-        }
+      }
     }
   }
 

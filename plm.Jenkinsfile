@@ -13,14 +13,6 @@ pipeline {
         TERRAFORM_MODULE = ${TERRAFORM_MODULE}
     }
     stages {
-        // input(
-        //   message: 'Please choose an option:',
-        //   parameters: [
-        //       choice(choices: 'jenkins\nkafka\nprometheus\nvault-secrets',
-        //              description: 'Select one of the options',
-        //              name: 'UserChoice')
-        //   ]
-        // )
         stage('Terragrunt build') {
             steps {
                 script {
