@@ -41,8 +41,8 @@ pipeline {
   environment {
     LOCATION = 'on-prem' // Set LOCATION as 'on-prem'
     ENVIRONMENT = "${env.GIT_BRANCH}" // Dynamically get the Git branch
-    VAULT_ADDR = credentials('vault-cluster-addr')
-    VAULT_TOKEN = credentials('vault-token')
+    // VAULT_ADDR = credentials('vault-cluster-addr')
+    // VAULT_TOKEN = credentials('vault-token')
   }
   stages {
     // stage('Setup kubectl') {
@@ -100,8 +100,8 @@ pipeline {
         script {
           node {
               echo 'Testing on test-agent...'
-              echo '${VAULT_ADDR}'
-              echo '${VAULT_TOKEN}'
+              echo '${LOCATION}'
+              echo '${ENVIRONMENT}'
               // Your test logic here
           }
         }
