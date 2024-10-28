@@ -2,7 +2,7 @@ pipeline {
     parameters {
       choice(
           name: 'terraform_module',
-          choices: ['jenkins', 'kafka', 'prometheus', 'vault-secrets', 'consul', 'vault'],
+          choices: ['', 'jenkins', 'kafka', 'prometheus', 'vault-secrets', 'consul', 'vault'],
           description: 'Select one of the options'
       )
     }
@@ -22,7 +22,7 @@ pipeline {
                     sh '''
                     cd terragrunt-environments
 
-                    if [[ -n "${TERRAFORM_MODULE}" ]]; then
+                    if [[ "${params.terraform_module}" != "" ]]; then
                       deployments/${LOCATION}/build.sh ${ENVIRONMENT} ${params.terraform_module}
                     else
                       deployments/${LOCATION}/build.sh ${ENVIRONMENT}
@@ -38,7 +38,7 @@ pipeline {
                     sh '''
                     cd terragrunt-environments
 
-                    if [[ -n "${TERRAFORM_MODULE}" ]]; then
+                    if [[ "${params.terraform_module}" != "" ]]; then
                       deployments/${LOCATION}/deploy.sh ${ENVIRONMENT} ${params.terraform_module}
                     else
                       deployments/${LOCATION}/deploy.sh ${ENVIRONMENT}
@@ -55,9 +55,9 @@ pipeline {
     //             sh '''
     //             cd terragrunt-environments
     //             if [[ -n "${TERRAFORM_MODULE}" ]]; then
-    //               deployments/${LOCATION}/deploy.sh ${ENVIRONMENT} ${params.terraform_module}
+    //               deployments/${LOCATION}/post.sh ${ENVIRONMENT} ${params.terraform_module}
     //             else
-    //               deployments/${LOCATION}/deploy.sh ${ENVIRONMENT}
+    //               deployments/${LOCATION}/post.sh ${ENVIRONMENT}
     //             fi
     //             '''
     //         }
