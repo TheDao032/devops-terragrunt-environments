@@ -2,7 +2,7 @@ pipeline {
   parameters {
     choice(
         name: 'terraform_module',
-        choices: ['jenkins', 'kafka', 'prometheus', 'vault-secrets'],
+        choices: ['jenkins', 'kafka', 'prometheus', 'vault-secrets', 'consul', 'vault'],
         description: 'Select one of the options'
     )
   }
@@ -41,8 +41,8 @@ pipeline {
   environment {
     LOCATION = 'on-prem' // Set LOCATION as 'on-prem'
     ENVIRONMENT = "${env.GIT_BRANCH}" // Dynamically get the Git branch
-    // VAULT_ADDR = credentials('vault-cluster-addr')
-    // VAULT_TOKEN = credentials('vault-token')
+    VAULT_ADDR = credentials('vault-cluster-addr')
+    VAULT_TOKEN = credentials('vault-token')
   }
   stages {
     // stage('Setup kubectl') {
@@ -64,48 +64,36 @@ pipeline {
     //         }
     //     }
     // }
-    // stage('Terragrunt build') {
-    //     steps {
-    //         script {
-    //             sh '''
-    //             cd terragrunt-environments
-    //
-    //             if [[ -n "${TERRAFORM_MODULE}" ]]; then
-    //               deployments/${LOCATION}/build.sh ${ENVIRONMENT} ${params.terraform_module}
-    //             else
-    //               deployments/${LOCATION}/build.sh ${ENVIRONMENT}
-    //             fi
-    //             '''
-    //         }
-    //     }
-    // }
-    // stage('Terragrunt deploy') {
-    //     steps {
-    //         input(message: 'Proceed with Terragrunt apply?') // Optional for manual approval
-    //         script {
-    //             sh '''
-    //             cd terragrunt-environments
-    //
-    //             if [[ -n "${TERRAFORM_MODULE}" ]]; then
-    //               deployments/${LOCATION}/deploy.sh ${ENVIRONMENT} ${params.terraform_module}
-    //             else
-    //               deployments/${LOCATION}/deploy.sh ${ENVIRONMENT}
-    //             fi
-    //             '''
-    //         }
-    //     }
-    // }
-    stage('Test') {
-      steps {
-        script {
-          node {
-              echo 'Testing on test-agent...'
-              echo '${LOCATION}'
-              echo '${ENVIRONMENT}'
-              // Your test logic here
-          }
+    stage('Terragrunt build') {
+        steps {
+            script {
+                sh '''
+                cd terragrunt-environments
+
+                if [[ -n "${TERRAFORM_MODULE}" ]]; then
+                  deployments/${LOCATION}/build.sh ${ENVIRONMENT} ${params.terraform_module}
+                else
+                  deployments/${LOCATION}/build.sh ${ENVIRONMENT}
+                fi
+                '''
+            }
         }
-      }
+    }
+    stage('Terragrunt deploy') {
+        steps {
+            input(message: 'Proceed with Terragrunt apply?') // Optional for manual approval
+            script {
+                sh '''
+                cd terragrunt-environments
+
+                if [[ -n "${TERRAFORM_MODULE}" ]]; then
+                  deployments/${LOCATION}/deploy.sh ${ENVIRONMENT} ${params.terraform_module}
+                else
+                  deployments/${LOCATION}/deploy.sh ${ENVIRONMENT}
+                fi
+                '''
+            }
+        }
     }
   }
 
