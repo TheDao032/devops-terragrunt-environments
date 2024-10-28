@@ -68,8 +68,6 @@ pipeline {
         steps {
             script {
                 sh '''
-                cd terragrunt-environments
-
                 if [[ -n "${TERRAFORM_MODULE}" ]]; then
                   deployments/${LOCATION}/build.sh ${ENVIRONMENT} ${params.terraform_module}
                 else
@@ -84,8 +82,6 @@ pipeline {
             input(message: 'Proceed with Terragrunt apply?') // Optional for manual approval
             script {
                 sh '''
-                cd terragrunt-environments
-
                 if [[ -n "${TERRAFORM_MODULE}" ]]; then
                   deployments/${LOCATION}/deploy.sh ${ENVIRONMENT} ${params.terraform_module}
                 else
@@ -97,14 +93,17 @@ pipeline {
     }
   }
 
-  // post {
-  //     always {
-  //         script {
-  //             sh '''
-  //             cd terragrunt-environments
-  //             deployments/${LOCATION}/deploy.sh ${ENVIRONMENT}
-  //             '''
-  //         }
-  //     }
-  // }
+  post {
+      always {
+          script {
+              sh '''
+                if [[ -n "${TERRAFORM_MODULE}" ]]; then
+                  deployments/${LOCATION}/deploy.sh ${ENVIRONMENT} ${params.terraform_module}
+                else
+                  deployments/${LOCATION}/deploy.sh ${ENVIRONMENT}
+                fi
+              '''
+          }
+      }
+  }
 }
