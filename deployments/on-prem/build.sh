@@ -8,12 +8,12 @@ set -euo pipefail
 
 ENVIRONMENT=${1:-"local"}
 MODULE=${2:-""}
-LOCATION="on-prem"
 
-# SCRIPT_ABS_PATH="$( realpath "${0}")"
-# LIB_DIR="${SCRIPT_ABS_PATH%/*}/envs/${ENVIRONMENT}"
-LIB_DIR="deployments/${LOCATION}/envs/${ENVIRONMENT}"
 UTILS_DIR="deployments/utils/utils.sh"
+
+SCRIPT_ABS_PATH="$( realpath "${0}")"
+LIB_DIR="${SCRIPT_ABS_PATH%/*}/envs/${ENVIRONMENT}"
+# LIB_DIR="deployments/${LOCATION}/envs/${ENVIRONMENT}"
 
 for LIB_FILE in "${LIB_DIR}"/*.bash; do
   source "${UTILS_DIR}"
