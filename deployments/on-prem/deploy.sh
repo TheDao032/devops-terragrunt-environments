@@ -8,11 +8,15 @@ set -euo pipefail
 
 ENVIRONMENT=${1:-"local"}
 MODULE=${2:-""}
+LOCATION="on-prem"
 
-SCRIPT_ABS_PATH="$( realpath "${0}")"
-LIB_DIR="${SCRIPT_ABS_PATH%/*}/envs/${ENVIRONMENT}"
+# SCRIPT_ABS_PATH="$( realpath "${0}")"
+# LIB_DIR="${SCRIPT_ABS_PATH%/*}/envs/${ENVIRONMENT}"
+LIB_DIR="deployments/${LOCATION}/envs/${ENVIRONMENT}"
+UTILS_DIR="deployments/utils/utils.sh"
 
 for LIB_FILE in "${LIB_DIR}"/*.bash; do
+  source "${UTILS_DIR}"
   source "${LIB_FILE}" ${ENVIRONMENT} || { log_info "$(date -u) - FATAL - failure occured while reading ${LIB_FILE}"; exit 1; }
 done
 
