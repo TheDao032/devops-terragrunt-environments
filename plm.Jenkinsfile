@@ -1,6 +1,10 @@
 pipeline {
     parameters {
-        choice(name: 'PLATFORM_FILTER', choices: ['all', 'linux', 'windows', 'mac'], description: 'Run on specific platform')
+      choice(
+          name: 'terraform_module',
+          choices: ['jenkins', 'kafka', 'prometheus', 'vault-secrets', 'consul', 'vault'],
+          description: 'Select one of the options'
+      )
     }
     agent {
       label 'k3s-agent'
@@ -10,7 +14,6 @@ pipeline {
         ENVIRONMENT = "${env.GIT_BRANCH}" // Dynamically get the Git branch
         VAULT_ADDR = credentials('vault-cluster-addr')
         VAULT_TOKEN = credentials('vault-token')
-        TERRAFORM_MODULE = ${TERRAFORM_MODULE}
     }
     stages {
         stage('Terragrunt build') {
@@ -20,7 +23,7 @@ pipeline {
                     cd terragrunt-environments
 
                     if [[ -n "${TERRAFORM_MODULE}" ]]; then
-                      deployments/${LOCATION}/build.sh ${ENVIRONMENT} ${TERRAFORM_MODULE}
+                      deployments/${LOCATION}/build.sh ${ENVIRONMENT} ${params.terraform_module}
                     else
                       deployments/${LOCATION}/build.sh ${ENVIRONMENT}
                     fi
@@ -36,7 +39,7 @@ pipeline {
                     cd terragrunt-environments
 
                     if [[ -n "${TERRAFORM_MODULE}" ]]; then
-                      deployments/${LOCATION}/deploy.sh ${ENVIRONMENT} ${TERRAFORM_MODULE}
+                      deployments/${LOCATION}/deploy.sh ${ENVIRONMENT} ${params.terraform_module}
                     else
                       deployments/${LOCATION}/deploy.sh ${ENVIRONMENT}
                     fi
@@ -51,7 +54,11 @@ pipeline {
     //         script {
     //             sh '''
     //             cd terragrunt-environments
-    //             deployments/${LOCATION}/deploy.sh ${ENVIRONMENT}
+    //             if [[ -n "${TERRAFORM_MODULE}" ]]; then
+    //               deployments/${LOCATION}/deploy.sh ${ENVIRONMENT} ${params.terraform_module}
+    //             else
+    //               deployments/${LOCATION}/deploy.sh ${ENVIRONMENT}
+    //             fi
     //             '''
     //         }
     //     }
