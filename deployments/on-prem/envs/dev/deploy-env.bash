@@ -22,7 +22,7 @@ export KUBE_HOST=$(vault kv get -field=host -version=2 ${K3S_SECRETS_PATH}/serve
 
 if [[ "${SECRETS_TYPE}" == "env" ]]; then
   export K3S_SERVER_1=${K3S_SERVER_1:-"192.168.56.11"}
-  export K3S_SERVER_2=${K3S_SERVER_2:-"192.168.56.12"}
+  # export K3S_SERVER_2=${K3S_SERVER_2:-"192.168.56.12"}
   export K3S_AGENT_1=${K3S_AGENT_1:-"192.168.56.21"}
   export K3S_AGENT_2=${K3S_AGENT_2:-"192.168.56.22"}
 

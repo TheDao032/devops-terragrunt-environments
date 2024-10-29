@@ -12,14 +12,13 @@ locals {
   }
 
   k3s_vms = {
-    server_1: get_env("K3S_SERVER_1")
-    agent_1: get_env("K3S_AGENT_1")
-    agent_2: get_env("K3S_AGENT_2")
+    server-1: get_env("K3S_SERVER_1")
+    agent-1: get_env("K3S_AGENT_1")
+    agent-2: get_env("K3S_AGENT_2")
   }
 
   k3s_envs = {
     api_endpoint: get_env("K3S_SERVER_1")
-
     keepalived_virtual_ip: get_env("KEEPALIVED_VIRTUAL_IP")
     load_balancer_port: get_env("LOAD_BALANCER_PORT")
     psql_version: get_env("PSQL_VERSION")
