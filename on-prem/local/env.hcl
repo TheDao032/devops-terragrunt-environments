@@ -20,8 +20,8 @@ locals {
 
   k3s_envs = {
     api_endpoint: get_env("K3S_SERVER_1")
-
     keepalived_virtual_ip: get_env("KEEPALIVED_VIRTUAL_IP")
+    keepalived_nw_interface: get_env("KEEPALIVED_NW_INTERFACE")
     load_balancer_port: get_env("LOAD_BALANCER_PORT")
     psql_version: get_env("PSQL_VERSION")
     k3s_server_cidr_range: get_env("K3S_SERVER_CIDR_RANGE")

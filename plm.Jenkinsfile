@@ -2,7 +2,7 @@ pipeline {
     parameters {
       choice(
           name: 'terraform_module',
-          choices: ['', 'jenkins', 'kafka', 'prometheus', 'vault-secrets', 'consul', 'vault'],
+          choices: ['vault-secrets', 'jenkins', 'kafka', 'prometheus', 'consul', 'vault', ''],
           description: 'Select one of the options'
       )
     }
@@ -20,15 +20,16 @@ pipeline {
             steps {
                 script {
                     def terraformModule = params.terraform_module
-                    sh '''
+                    sh """
                     cd terragrunt-environments
+                    chmod +x -R deployments
 
                     if [[ -n "${terraformModule}" ]]; then
                       deployments/${LOCATION}/build.sh ${ENVIRONMENT} ${terraformModule}
                     else
                       deployments/${LOCATION}/build.sh ${ENVIRONMENT}
                     fi
-                    '''
+                    """
                 }
             }
         }
@@ -37,7 +38,7 @@ pipeline {
                 input(message: 'Proceed with Terragrunt apply?') // Optional for manual approval
                 script {
                     def terraformModule = params.terraform_module
-                    sh '''
+                    sh """
                     cd terragrunt-environments
 
                     if [[ -n "${terraformModule}" ]]; then
@@ -45,7 +46,7 @@ pipeline {
                     else
                       deployments/${LOCATION}/deploy.sh ${ENVIRONMENT}
                     fi
-                    '''
+                    """
                 }
             }
         }
@@ -54,14 +55,14 @@ pipeline {
     // post {
     //     always {
     //         script {
-    //             sh '''
+    //             sh """
     //             cd terragrunt-environments
     //             if [[ -n "${TERRAFORM_MODULE}" ]]; then
     //               deployments/${LOCATION}/post.sh ${ENVIRONMENT} ${params.terraform_module}
     //             else
     //               deployments/${LOCATION}/post.sh ${ENVIRONMENT}
     //             fi
-    //             '''
+    //             """
     //         }
     //     }
     // }
