@@ -19,11 +19,12 @@ pipeline {
         stage('Terragrunt build') {
             steps {
                 script {
+                    def terraformModule = params.terraform_module
                     sh '''
                     cd terragrunt-environments
 
-                    if [[ "${params.terraform_module}" != "" ]]; then
-                      deployments/${LOCATION}/build.sh ${ENVIRONMENT} ${params.terraform_module}
+                    if [[ -n "${terraformModule}" ]]; then
+                      deployments/${LOCATION}/build.sh ${ENVIRONMENT} ${terraformModule}
                     else
                       deployments/${LOCATION}/build.sh ${ENVIRONMENT}
                     fi
@@ -35,11 +36,12 @@ pipeline {
             steps {
                 input(message: 'Proceed with Terragrunt apply?') // Optional for manual approval
                 script {
+                    def terraformModule = params.terraform_module
                     sh '''
                     cd terragrunt-environments
 
-                    if [[ "${params.terraform_module}" != "" ]]; then
-                      deployments/${LOCATION}/deploy.sh ${ENVIRONMENT} ${params.terraform_module}
+                    if [[ -n "${terraformModule}" ]]; then
+                      deployments/${LOCATION}/deploy.sh ${ENVIRONMENT} ${terraformModule}
                     else
                       deployments/${LOCATION}/deploy.sh ${ENVIRONMENT}
                     fi
