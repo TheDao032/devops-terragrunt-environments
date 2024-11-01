@@ -14,5 +14,4 @@ include {
 
 inputs = {
   # Overrides variables from env.hcl
-  kv_secret_path = "kv"
 }
