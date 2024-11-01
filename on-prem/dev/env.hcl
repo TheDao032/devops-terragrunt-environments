@@ -8,6 +8,7 @@ locals {
     jenkinsPassword = "{ _RANDOM_ = 18 }"
     grafanaUsername = "admin"
     grafanaPassword = "{ _RANDOM_ = 18 }"
+    kafkaClientUsername = "admin"
     kafkaClientPassword = "{ _RANDOM_ = 18 }"
   }
 
