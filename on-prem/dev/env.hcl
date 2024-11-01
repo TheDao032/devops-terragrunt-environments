@@ -13,7 +13,6 @@ locals {
 
   k3s_params = {
     server-1: get_env("K3S_SERVER_1")
-    server-2: get_env("K3S_SERVER_2")
     agent-1: get_env("K3S_AGENT_1")
     agent-2: get_env("K3S_AGENT_2")
     api_endpoint: get_env("K3S_SERVER_1")
