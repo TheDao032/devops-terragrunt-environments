@@ -34,3 +34,5 @@ locals {
   vault_secrets = {
     root_token: get_env("VAULT_TOKEN")
   }
+
+}
