@@ -12,8 +12,9 @@ terraform {
 dependency "vault-secrets" {
   config_path = "../vault-secrets"
   mock_outputs = {
-    output = {
-      kafkaClientPassword = "value"
+    kafka_secrets = {
+      clientUsername = "value"
+      clientPassword = "value"
     }
   }
   mock_outputs_merge_strategy_with_state = "shallow"
@@ -49,7 +50,8 @@ inputs = {
 
   sasl_conf = {
     client = {
-      password: dependency.vault-secrets.outputs.output["kafkaClientPassword"]
+      username: dependency.vault-secrets.outputs.kafka_secrets["clientUsername"]
+      password: dependency.vault-secrets.outputs.kafka_secrets["clientPassword"]
     }
   }
 }

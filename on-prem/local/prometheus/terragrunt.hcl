@@ -9,9 +9,9 @@ terraform {
 dependency "vault-secrets" {
   config_path = "../vault-secrets"
   mock_outputs = {
-    output = {
-      grafanaUsername = "value"
-      grafanaPassword = "value"
+    grafana_secrets = {
+      username = "value"
+      password = "value"
     }
   }
   mock_outputs_merge_strategy_with_state = "shallow"
@@ -54,8 +54,8 @@ inputs = {
     }
 
     auth = {
-      username = dependency.vault-secrets.outputs.output["grafanaUsername"]
-      password = dependency.vault-secrets.outputs.output["grafanaPassword"]
+      username = dependency.vault-secrets.outputs.grafana_secrets["username"]
+      password = dependency.vault-secrets.outputs.grafana_secrets["password"]
     }
   }
 }
