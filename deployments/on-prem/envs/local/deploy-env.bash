@@ -10,13 +10,13 @@ K3S_SECRETS_PATH=${K3S_SECRETS_PATH:-"${ENVIRONMENT}/k3s/creds"}
 # VAULT_SECRETS_PATH=${VAULT_SECRETS_PATH:-"${ENVIRONMENT}/vault/creds"}
 
 export VAULT_ADDR=${VAULT_ADDR:-"https://192.168.56.31:8200"}
-export VAULT_TOKEN=${VAULT_TOKEN:-"hvs.pawP5IZQ5UU5cWem2SMRarVM"}
+export VAULT_TOKEN=${VAULT_TOKEN:-"hvs.PkKyVHyLs7PuFu7ioqZ0CjS1"}
 export VAULT_SKIP_VERIFY=true
 vault login -address=${VAULT_ADDR} -method=token $(echo ${VAULT_TOKEN})
 
-export KUBE_CLIENT_KEY=$(vault kv get -field=client_key -version=2 ${K3S_SECRETS_PATH})
-export KUBE_CLIENT_CRT=$(vault kv get -field=client_crt -version=2 ${K3S_SECRETS_PATH})
-export KUBE_CLIENT_CA_CRT=$(vault kv get -field=client_ca_crt -version=2 ${K3S_SECRETS_PATH})
+export KUBE_CLIENT_KEY_DATA=$(vault kv get -field=client_key -version=2 ${K3S_SECRETS_PATH})
+export KUBE_CLIENT_CERT_DATA=$(vault kv get -field=client_crt -version=2 ${K3S_SECRETS_PATH})
+export KUBE_CLUSTER_CA_CERT_DATA=$(vault kv get -field=client_ca_crt -version=2 ${K3S_SECRETS_PATH})
 export KUBE_TOKEN=$(vault kv get -field=token -version=2 ${K3S_SECRETS_PATH})
 export KUBE_HOST=$(vault kv get -field=host -version=2 ${K3S_SECRETS_PATH})
 
