@@ -26,9 +26,9 @@ PLAN_LOG_FILE_NAME=${5:-"plan-${ENVIRONMENT}.log"}
 if [[ -n "${MODULE}" ]]; then
   cd ${LOCATION}/${ENVIRONMENT}/${MODULE}
 
-  terragrunt init -upgrade -no-color --terragrunt-non-interactive --terragrunt-include-external-dependencies 2>&1 | tee /tmp/terragrunt-init.log
-  terragrunt validate -no-color --terragrunt-non-interactive --terragrunt-include-external-dependencies 2>&1 | tee /tmp/terragrunt-validate.log
-  terragrunt plan -no-color --terragrunt-non-interactive --terragrunt-include-external-dependencies 2>&1 | tee /tmp/terragrunt-plan.log
+  terragrunt init -upgrade -no-color --terragrunt-non-interactive --terragrunt-include-external-dependencies --terragrunt-debug 2>&1 | tee /tmp/terragrunt-init.log
+  terragrunt validate -no-color --terragrunt-non-interactive --terragrunt-include-external-dependencies --terragrunt-debug 2>&1 | tee /tmp/terragrunt-validate.log
+  terragrunt plan -no-color --terragrunt-non-interactive --terragrunt-include-external-dependencies --terragrunt-debug 2>&1 | tee /tmp/terragrunt-plan.log
 else
   # Run plan all and display output both to terminal and the log file temp.log
   cd ${LOCATION}/${ENVIRONMENT}

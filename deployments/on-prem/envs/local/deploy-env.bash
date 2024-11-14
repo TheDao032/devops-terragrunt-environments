@@ -10,7 +10,7 @@ K3S_SECRETS_PATH=${K3S_SECRETS_PATH:-"${ENVIRONMENT}/k3s/creds"}
 # VAULT_SECRETS_PATH=${VAULT_SECRETS_PATH:-"${ENVIRONMENT}/vault/creds"}
 
 export VAULT_ADDR=${VAULT_ADDR:-"https://192.168.56.31:8200"}
-export VAULT_TOKEN=${VAULT_TOKEN:-"hvs.PkKyVHyLs7PuFu7ioqZ0CjS1"}
+export VAULT_TOKEN=${VAULT_TOKEN:-"hvs.ypiiUOXNAwzG2qVvSxJe9aA9"}
 export VAULT_SKIP_VERIFY=true
 vault login -address=${VAULT_ADDR} -method=token $(echo ${VAULT_TOKEN})
 

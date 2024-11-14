@@ -1,4 +1,6 @@
 locals {
+  environment_vars = read_terragrunt_config(find_in_parent_folders("env.hcl"))
+  environment      = local.environment_vars.locals.environment
 }
 
 terraform {
@@ -10,13 +12,17 @@ dependency "vault-secrets" {
   config_path = "../vault-secrets"
   mock_outputs = {
     grafana_secrets = {
-      "grafana/creds": {
+      "grafana/creds" = {
         username = "value"
         password = "value"
       }
     }
   }
   mock_outputs_merge_strategy_with_state = "shallow"
+}
+
+include {
+  path = find_in_parent_folders()
 }
 
 inputs = {
