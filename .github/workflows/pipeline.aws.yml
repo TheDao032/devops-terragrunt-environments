@@ -21,6 +21,14 @@ on:
           - dev
           - uat
           - prod
+  push:
+    branches:
+      - dev
+      # - uat
+      # - prod
+      # - main
+    tags:
+      - "*"
 
 
 defaults:

@@ -54,11 +54,11 @@ runs:
       shell: bash
       env:
         SSH_AUTH_SOCK: "/github/workflow/ssh-agent.sock"
-      working-directory: ${{ inputs.CLOUD }}/${{ inputs.REGION }}/${{ inputs.ENV }}/
+      working-directory: ${{ inputs.CLOUD }}/${{ inputs.ENV}}-account/${{ inputs.REGION }}/${{ inputs.ENV }}/
       run: |
-        terragrunt run-all init --terragrunt-non-interactive --terragrunt-include-external-dependencies | tee "init-${{ inputs.CLOUD }}${{ inputs.REGION }}-${{ inputs.ENV }}.txt"
+        terragrunt run-all init --terragrunt-non-interactive --terragrunt-include-external-dependencies | tee "init-${{ inputs.CLOUD }}-${{ inputs.REGION }}-${{ inputs.ENV }}.txt"
         terragrunt run-all validate --terragrunt-non-interactive --terragrunt-include-external-dependencies
-        terragrunt run-all plan --terragrunt-non-interactive --terragrunt-include-external-dependencies | tee "plan-${{ inputs.CLOUD }}${{ inputs.REGION }}-${{ inputs.ENV }}.txt"
+        terragrunt run-all plan --terragrunt-non-interactive --terragrunt-include-external-dependencies | tee "plan-${{ inputs.CLOUD }}-${{ inputs.REGION }}-${{ inputs.ENV }}.txt"
 
     - uses: actions/upload-artifact@v3
       with:
