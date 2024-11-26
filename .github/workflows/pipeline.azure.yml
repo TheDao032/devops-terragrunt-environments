@@ -1,0 +1,85 @@
+name: Azure pipeline
+
+# on:
+#   push:
+#     branches:
+#       - dev
+#       - uat
+#       - prod
+#       # - main
+#     tags:
+#       - "*"
+
+on:
+  workflow_dispatch:
+    inputs:
+      ENV:
+        description: Environment Trigger Build
+        required: true
+        type: choice
+        options:
+          - dev
+          - uat
+          - prod
+
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  IMAGE: ${{ github.repository }}
+  ENV: ${{ github.event.inputs.ENV }}
+  # CLOUD_NAME: "google-cloud-platform"
+  CLOUD_NAME: "azure"
+
+jobs:
+  convert-name:
+    name: Convert repository name to lowercase
+    runs-on: ubuntu-latest
+    outputs:
+      lowercase_name: ${{ steps.lowercase_name.outputs.repo_name }}
+    steps:
+      - name: Set lowercase repository name
+        id: lowercase_name
+        run: echo "::set-output name=repo_name::$(echo '${{ env.IMAGE }}' | tr '[:upper:]' '[:lower:]')"
+
+  azure:
+    name: Azure infrastructure
+    runs-on: ubuntu-latest
+    needs: convert-name
+    container: ${{ vars.REGISTRY }}/${{ needs.convert-name.outputs.lowercase_name }}
+    environment:
+      name: azure-${{ github.ref_name }}
+    env:
+      STORAGE_ACCOUNT: ${{ secrets.STORAGE_ACCOUNT }}
+      RESOURCE_GROUP: ${{ secrets.RESOURCE_GROUP }}
+      CONTAINER: ${{ secrets.CONTAINER }}
+      ARM_CLIENT_ID: ${{ secrets.CLIENT_ID }}
+      ARM_CLIENT_SECRET: ${{ secrets.CLIENT_SECRET }}
+      ARM_TENANT_ID: ${{ secrets.TENANT_ID }}
+      ARM_SUBSCRIPTION_ID: ${{ secrets.SUBSCRIPTION_ID }}
+      ARM_OBJECT_ID: ${{ secrets.OBJECT_ID }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build Azure infrastructure
+        id: azure-build
+        uses: ./.github/actions/azure/build
+        with:
+          CLOUD: "${{ env.CLOUD_NAME }}"
+          ENV: "${{ env.ENV }}"
+          REGION: "${{ vars.REGION }}"
+          AZURE_CREDENTIALS: "${{ secrets.AZURE_CREDENTIALS }}"
+          SSH_PRIVATE_KEY: "${{ secrets.SSH_PRIVATE_KEY }}"
+
+      - name: Deploy Azure infrastructure
+        id: azure-deploy
+        uses: ./.github/actions/azure/deploy
+        with:
+          CLOUD: "${{ env.CLOUD_NAME }}"
+          ENV: "${{ env.ENV }}"
+          REGION: "${{ vars.REGION }}"
+          AZURE_CREDENTIALS: "${{ secrets.AZURE_CREDENTIALS }}"
+          SSH_PRIVATE_KEY: "${{ secrets.SSH_PRIVATE_KEY }}"

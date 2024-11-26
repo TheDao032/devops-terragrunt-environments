@@ -1,0 +1,69 @@
+name: GCP pipeline
+
+# on:
+#   push:
+#     branches:
+#       - dev
+#       - uat
+#       - prod
+#       # - main
+#     tags:
+#       - "*"
+
+on:
+  workflow_dispatch:
+    inputs:
+      ENV:
+        description: Environment Trigger Build
+        required: true
+        type: choice
+        options:
+          - dev
+          - uat
+          - prod
+
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  IMAGE: ${{ github.repository }}
+  ENV: ${{ github.event.inputs.ENV }}
+  CLOUD_NAME: "google-cloud-platform"
+
+jobs:
+  convert-name:
+    name: Convert repository name to lowercase
+    runs-on: ubuntu-latest
+    outputs:
+      lowercase_name: ${{ steps.lowercase_name.outputs.repo_name }}
+    steps:
+      - name: Set lowercase repository name
+        id: lowercase_name
+        run: echo "::set-output name=repo_name::$(echo '${{ env.IMAGE }}' | tr '[:upper:]' '[:lower:]')"
+
+  gcp:
+    name: GCP infrastructure
+    runs-on: ubuntu-latest
+    needs: convert-name
+    container: ${{ vars.REGISTRY }}/${{ needs.convert-name.outputs.lowercase_name }}
+    environment:
+      name: gcp-${{ github.ref_name }}
+    env:
+      PROJECT: ${{ secrets.PROJECT }}
+      PROJECT_ID: ${{ secrets.PROJECT_ID }}
+      BUCKET: ${{ vars.BUCKET }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Destroy GCP infrastructure
+        id: gcp-destroy
+        uses: ./.github/actions/gcp/destroy
+        with:
+          CLOUD: "${{ env.CLOUD_NAME }}"
+          ENV: "${{ env.ENV }}"
+          REGION: "${{ vars.REGION }}"
+          GOOGLE_CREDENTIALS: "${{ secrets.GOOGLE_CREDENTIALS }}"
+          SSH_PRIVATE_KEY: "${{ secrets.SSH_PRIVATE_KEY }}"
