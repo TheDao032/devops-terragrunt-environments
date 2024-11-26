@@ -10,15 +10,17 @@ K3S_SECRETS_PATH=${K3S_SECRETS_PATH:-"${ENVIRONMENT}/k3s/creds"}
 # VAULT_SECRETS_PATH=${VAULT_SECRETS_PATH:-"${ENVIRONMENT}/vault/creds"}
 
 export VAULT_ADDR=${VAULT_ADDR:-"https://192.168.56.31:8200"}
-export VAULT_TOKEN=${VAULT_TOKEN:-"hvs.ypiiUOXNAwzG2qVvSxJe9aA9"}
+export VAULT_TOKEN=${VAULT_TOKEN:-"hvs.nvLBbrifPrlxEmpL931AHMgG"}
 export VAULT_SKIP_VERIFY=true
 vault login -address=${VAULT_ADDR} -method=token $(echo ${VAULT_TOKEN})
 
-export KUBE_CLIENT_KEY_DATA=$(vault kv get -field=client_key -version=2 ${K3S_SECRETS_PATH})
-export KUBE_CLIENT_CERT_DATA=$(vault kv get -field=client_crt -version=2 ${K3S_SECRETS_PATH})
-export KUBE_CLUSTER_CA_CERT_DATA=$(vault kv get -field=client_ca_crt -version=2 ${K3S_SECRETS_PATH})
-export KUBE_TOKEN=$(vault kv get -field=token -version=2 ${K3S_SECRETS_PATH})
-export KUBE_HOST=$(vault kv get -field=host -version=2 ${K3S_SECRETS_PATH})
+export KUBE_CLIENT_KEY_DATA=$(vault kv get -field=client_key ${K3S_SECRETS_PATH})
+export KUBE_CLIENT_CERT_DATA=$(vault kv get -field=client_crt ${K3S_SECRETS_PATH})
+export KUBE_CLUSTER_CA_CERT_DATA=$(vault kv get -field=client_ca_crt ${K3S_SECRETS_PATH})
+export KUBE_TOKEN=$(vault kv get -field=token ${K3S_SECRETS_PATH})
+export KUBE_HOST=$(vault kv get -field=host ${K3S_SECRETS_PATH})
+export CLOUDFLARE_API_TOKEN=${CLOUDFLARE_API_TOKEN:-"IrdarobCCiw-MzA5qe3Wx8sy7xQ6PiOssigVM8A9Copy"}
+
 
 if [[ "${SECRETS_TYPE}" == "env" ]]; then
   export K3S_SERVER_1=${K3S_SERVER_1:-"192.168.56.11"}
@@ -36,4 +38,3 @@ if [[ "${SECRETS_TYPE}" == "env" ]]; then
   export DB_CLUSTER_ENDPOINT=${DB_CLUSTER_ENDPOINT:-"192.168.56.31"}
   export ARTIFACTORY_REGISTRY=${ARTIFACTORY_REGISTRY:-"nthedao"}
 fi
-

@@ -26,33 +26,36 @@ include {
 }
 
 inputs = {
-  chart_version = "65.1.0"
-  namespace = "monitoring"
-  helm_repository = "https://prometheus-community.github.io/helm-charts"
-  helm_release_name = "prometheus"
+  chart_version      = "65.1.0"
+  namespace          = "monitoring"
+  helm_repository    = "https://prometheus-community.github.io/helm-charts"
+  helm_release_name  = "prometheus"
   helm_release_chart = "kube-prometheus-stack"
 
   prometheus = {
     ingress = {
-      host = "nthedao.info"
-      prefix = "/prometheus"
-      prefix_type = "Prefix"
+      host         = "nthedao.info"
+      prefix       = "/"
+      prefix_type  = "Prefix"
+      strip_prefix = "prometheus-strip-prefix"
     }
   }
 
   alertmanager = {
     ingress = {
-      host = "nthedao.info"
-      prefix = "/alertmanager"
-      prefix_type = "Prefix"
+      host         = "nthedao.info"
+      prefix       = "/alertmanager"
+      prefix_type  = "Prefix"
+      strip_prefix = "alertmanager-strip-prefix"
     }
   }
 
   grafana = {
     ingress = {
-      host = "nthedao.info"
-      prefix = "/grafana"
-      prefix_type = "Prefix"
+      host         = "nthedao.info"
+      prefix       = "/grafana"
+      prefix_type  = "Prefix"
+      strip_prefix = "grafana-strip-prefix"
     }
 
     auth = {
