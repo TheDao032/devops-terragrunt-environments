@@ -37,7 +37,7 @@ defaults:
 
 env:
   IMAGE: ${{ github.repository }}
-  ENV: ${{ github.event.inputs.ENV }}
+  ENV: ${{ github.event.inputs.ENV || github.ref_name }}
   CLOUD_NAME: "amazon-web-service"
 
 jobs:
