@@ -13,7 +13,6 @@ UTILS_DIR="deployments/utils/utils.sh"
 
 SCRIPT_ABS_PATH="$( realpath "${0}")"
 LIB_DIR="${SCRIPT_ABS_PATH%/*}/envs/${ENVIRONMENT}"
-# LIB_DIR="deployments/${LOCATION}/envs/${ENVIRONMENT}"
 
 for LIB_FILE in "${LIB_DIR}"/*.bash; do
   source "${UTILS_DIR}"
@@ -27,16 +26,18 @@ PLAN_LOG_FILE_NAME=${5:-"plan-${ENVIRONMENT}.log"}
 if [[ -n "${MODULE}" ]]; then
   cd ${LOCATION}/${ENVIRONMENT}/${MODULE}
 
-  terragrunt init -no-color --terragrunt-non-interactive --terragrunt-include-external-dependencies 2>&1 | tee /tmp/terragrunt-init.log
-  terragrunt validate -no-color --terragrunt-non-interactive --terragrunt-include-external-dependencies 2>&1 | tee /tmp/terragrunt-validate.log
-  terragrunt plan -no-color --terragrunt-non-interactive --terragrunt-include-external-dependencies 2>&1 | tee /tmp/terragrunt-plan.log
+  terragrunt init -upgrade -no-color --terragrunt-non-interactive --terragrunt-include-external-dependencies --terragrunt-debug 2>&1 | tee /tmp/terragrunt-init.log
+  terragrunt validate -no-color --terragrunt-non-interactive --terragrunt-include-external-dependencies --terragrunt-debug 2>&1 | tee /tmp/terragrunt-validate.log
+  terragrunt plan -no-color --terragrunt-non-interactive --terragrunt-include-external-dependencies --terragrunt-debug 2>&1 | tee /tmp/terragrunt-plan.log
+  terragrunt output -no-color --terragrunt-non-interactive --terragrunt-include-external-dependencies --terragrunt-debug 2>&1 | tee /tmp/terragrunt-output.yaml
 else
   # Run plan all and display output both to terminal and the log file temp.log
   cd ${LOCATION}/${ENVIRONMENT}
 
-  terragrunt run-all init -no-color --terragrunt-non-interactive --terragrunt-include-external-dependencies 2>&1 | tee /tmp/terragrunt-init.log
+  terragrunt run-all init -upgrade -no-color --terragrunt-non-interactive --terragrunt-include-external-dependencies 2>&1 | tee /tmp/terragrunt-init.log
   terragrunt run-all validate -no-color --terragrunt-non-interactive --terragrunt-include-external-dependencies 2>&1 | tee /tmp/terragrunt-validate.log
   terragrunt run-all plan -no-color --terragrunt-non-interactive --terragrunt-include-external-dependencies 2>&1 | tee /tmp/terragrunt-plan.log
+  terragrunt run-all output -no-color --terragrunt-non-interactive --terragrunt-include-external-dependencies 2>&1 | tee /tmp/terragrunt-output.yaml
 fi
 
 log_path=/tmp/terragrunt

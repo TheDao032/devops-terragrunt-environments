@@ -1,0 +1,64 @@
+name: Build
+description: GCP Build
+
+inputs:
+  CLOUD:
+    required: true
+    description: GCP Cloud
+  ENV:
+    required: true
+    description: GCP Environment
+  REGION:
+    required: true
+    description: GCP Region
+  GOOGLE_CREDENTIALS:
+    required: true
+    description: GCP Credentails
+  SSH_PRIVATE_KEY:
+    required: true
+    description: SSH Private Key
+
+runs:
+  using: "composite"
+  steps:
+    - name: 'Set up Cloud SDK'
+      uses: 'google-github-actions/setup-gcloud@v2'
+      with:
+        version: '>= 363.0.0'
+
+    - id: 'auth'
+      uses: 'google-github-actions/auth@v2'
+      with:
+        credentials_json: ${{ inputs.GOOGLE_CREDENTIALS }}
+        # project_id: '${{ inputs.PROJECT_ID }}'
+        # workload_identity_provider: 'projects/${{ inputs.PROJECT_ID }}/locations/global/workloadIdentityPools/${{ inputs.POOL }}/providers/${{ inputs.PROVIDER }}'
+        # service_account: '${{ inputs.SERVICE_ACCOUNT }}'
+
+    - name: GCP Setup
+      id: gcp-setup
+      shell: bash
+      run: |
+        mkdir -p /home/runner/work/_temp/_github_workflow
+        mv terragrunt.gcp.hcl terragrunt.hcl
+        gcloud info
+
+    - uses: webfactory/ssh-agent@v0.7.0
+      with:
+        ssh-private-key: ${{ inputs.SSH_PRIVATE_KEY }}
+        ssh-auth-sock: "/home/runner/work/_temp/_github_workflow/ssh-agent.sock"
+
+    - name: Build
+      id: terragrunt-plan
+      shell: bash
+      env:
+        SSH_AUTH_SOCK: "/github/workflow/ssh-agent.sock"
+      working-directory: ${{ inputs.CLOUD }}/${{ inputs.REGION }}/${{ inputs.ENV }}/
+      run: |
+        terragrunt run-all init
+        terragrunt run-all validate
+        terragrunt run-all plan -no-color --terragrunt-non-interactive --terragrunt-include-external-dependencies | tee plan-${{ inputs.CLOUD }}${{ inputs.REGION }}-${{ inputs.ENV }}.txt
+
+    - uses: actions/upload-artifact@v3
+      with:
+        name: terragrunt
+        path: ${{ inputs.CLOUD }}/${{ inputs.REGION }}/${{ inputs.ENV }}/plan-${{ inputs.ENV }}.txt
