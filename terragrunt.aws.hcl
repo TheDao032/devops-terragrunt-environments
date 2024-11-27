@@ -28,8 +28,8 @@ locals {
   # backend_workspace = local.backend_vars.locals.workspaces_name
 
   # Automatically load region-level variables
-  location_vars = read_terragrunt_config(find_in_parent_folders("location.hcl"))
-  location      = local.location_vars.locals.location
+  # location_vars = read_terragrunt_config(find_in_parent_folders("location.hcl"))
+  # location      = local.location_vars.locals.location
 
   # Automatically load environment-level variables
   environment_vars = read_terragrunt_config(find_in_parent_folders("env.hcl"))
@@ -61,7 +61,7 @@ remote_state {
   backend = "s3"
   config = {
     encrypt = true
-    bucket  = "apollo-infra-${local.account_name}"
+    bucket  = "nthedao-infra-${local.account_name}"
     key     = "${path_relative_to_include()}/terraform.tfstate"
     region  = "ap-southeast-1"
     // dynamodb_table = "apollo-infra-${local.account_name}-locks"
