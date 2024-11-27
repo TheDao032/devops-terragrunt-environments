@@ -1,0 +1,62 @@
+name: AWS Destroy pipeline
+
+on:
+  workflow_dispatch:
+    inputs:
+      ENV:
+        description: Environment Trigger Destroy
+        required: true
+        type: choice
+        options:
+          - dev
+          - uat
+          - prod
+
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  IMAGE: ${{ github.repository }}
+  ENV: ${{ github.event.inputs.ENV }}
+  CLOUD_NAME: "amazon-web-service"
+
+jobs:
+  convert-name:
+    name: Convert repository name to lowercase
+    runs-on: ubuntu-latest
+    outputs:
+      lowercase_name: ${{ steps.lowercase_name.outputs.repo_name }}
+    steps:
+      - name: Set lowercase repository name
+        id: lowercase_name
+        run: |
+          echo "${{ env.ENV }}"
+          echo "::set-output name=repo_name::$(echo '${{ env.IMAGE }}' | tr '[:upper:]' '[:lower:]')"
+
+  amazon-web-service:
+    name: AWS Destroy infrastructure
+    runs-on: ubuntu-latest
+    needs: convert-name
+    container: ${{ vars.REGISTRY }}/${{ needs.convert-name.outputs.lowercase_name }}
+    environment:
+      name: aws-${{ github.ref_name }}
+    env:
+      ACCOUNT_NAME: thedao
+      ACCOUNT_ID: ${{ secrets.ACCOUNT_ID }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Destroy AWS infrastructure
+        id: aws-destroy
+        uses: ./.github/actions/aws/destroy
+        with:
+          CLOUD: "${{ env.CLOUD_NAME }}"
+          ENV: "${{ env.ENV }}"
+          REGION: "${{ vars.REGION }}"
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_ACCESS_SECRET_KEY: ${{ secrets.AWS_ACCESS_SECRET_KEY }}
+          ACCOUNT_ID: ${{ secrets.ACCOUNT_ID }}
+          SSH_PRIVATE_KEY: "${{ secrets.SSH_PRIVATE_KEY }}"

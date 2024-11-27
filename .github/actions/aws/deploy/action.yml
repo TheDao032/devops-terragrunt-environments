@@ -1,0 +1,64 @@
+name: Aws Deploy
+description: Aws Deploy
+
+inputs:
+  ACCOUNT_ID:
+    required: true
+    description: Aws Account ID
+  AWS_ACCESS_KEY_ID:
+    required: true
+    description: Aws Access Key ID
+  AWS_ACCESS_SECRET_KEY:
+    required: true
+    description: Aws Access Secret Key
+  CLOUD:
+    required: true
+    description: Aws Cloud
+  ENV:
+    required: true
+    description: Aws Env
+  REGION:
+    required: true
+    description: Aws Region
+  SSH_PRIVATE_KEY:
+    required: true
+    description: SSH Private Key
+
+runs:
+  using: "composite"
+  steps:
+    # - name: Configure AWS Credentials
+    #   uses: aws-actions/configure-aws-credentials@v4
+    #   with:
+    #     aws-access-key-id: ${{ inputs.AWS_ACCESS_KEY_ID }}
+    #     aws-secret-access-key: ${{ inputs.AWS_ACCESS_SECRET_KEY }}
+    #     aws-region: ${{ inputs.REGION }}
+    #     role-to-assume: arn:aws:iam::${{ inputs.ACCOUNT_ID }}:role/${{ inputs.ENV }}-access
+    #     role-duration-seconds: 3600
+    #     role-session-name: github
+    #
+    # - name: AWS Setup
+    #   shell: bash
+    #   id: aws-setup
+    #   run: |
+    #     mkdir -p /home/runner/work/_temp/_github_workflow
+    #     mv terragrunt.aws.hcl terragrunt.hcl
+    #
+    # - uses: webfactory/ssh-agent@v0.7.0
+    #   with:
+    #     ssh-private-key: ${{ inputs.SSH_PRIVATE_KEY }}
+    #     ssh-auth-sock: "/home/runner/work/_temp/_github_workflow/ssh-agent.sock"
+
+    - name: Deploy
+      id: terragrunt-apply
+      shell: bash
+      env:
+        SSH_AUTH_SOCK: "/github/workflow/ssh-agent.sock"
+      working-directory: ${{ inputs.CLOUD }}/${{ inputs.ENV}}-account/${{ inputs.REGION }}/${{ inputs.ENV }}/
+      run: |
+        terragrunt run-all apply --terragrunt-non-interactive --terragrunt-include-external-dependencies | tee "apply-${{ inputs.CLOUD }}-${{ inputs.REGION }}-${{ inputs.ENV }}.txt"
+
+    - uses: actions/upload-artifact@v3
+      with:
+        name: terragrunt-apply
+        path: ${{ inputs.CLOUD }}/${{ inputs.REGION }}/${{ inputs.ENV }}/apply-${{ inputs.ENV }}.txt

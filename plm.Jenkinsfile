@@ -1,6 +1,10 @@
 pipeline {
     parameters {
-        choice(name: 'PLATFORM_FILTER', choices: ['all', 'linux', 'windows', 'mac'], description: 'Run on specific platform')
+      choice(
+          name: 'terraform_module',
+          choices: ['vault-secrets', 'jenkins', 'kafka', 'prometheus', 'consul', 'vault', ''],
+          description: 'Select one of the options'
+      )
     }
     agent {
       label 'k3s-agent'
@@ -10,21 +14,22 @@ pipeline {
         ENVIRONMENT = "${env.GIT_BRANCH}" // Dynamically get the Git branch
         VAULT_ADDR = credentials('vault-cluster-addr')
         VAULT_TOKEN = credentials('vault-token')
-        TERRAFORM_MODULE = ${TERRAFORM_MODULE}
     }
     stages {
         stage('Terragrunt build') {
             steps {
                 script {
-                    sh '''
+                    def terraformModule = params.terraform_module
+                    sh """
                     cd terragrunt-environments
+                    chmod +x -R deployments
 
-                    if [[ -n "${TERRAFORM_MODULE}" ]]; then
-                      deployments/${LOCATION}/build.sh ${ENVIRONMENT} ${TERRAFORM_MODULE}
+                    if [[ -n "${terraformModule}" ]]; then
+                      deployments/${LOCATION}/build.sh ${ENVIRONMENT} ${terraformModule}
                     else
                       deployments/${LOCATION}/build.sh ${ENVIRONMENT}
                     fi
-                    '''
+                    """
                 }
             }
         }
@@ -32,15 +37,16 @@ pipeline {
             steps {
                 input(message: 'Proceed with Terragrunt apply?') // Optional for manual approval
                 script {
-                    sh '''
+                    def terraformModule = params.terraform_module
+                    sh """
                     cd terragrunt-environments
 
-                    if [[ -n "${TERRAFORM_MODULE}" ]]; then
-                      deployments/${LOCATION}/deploy.sh ${ENVIRONMENT} ${TERRAFORM_MODULE}
+                    if [[ -n "${terraformModule}" ]]; then
+                      deployments/${LOCATION}/deploy.sh ${ENVIRONMENT} ${terraformModule}
                     else
                       deployments/${LOCATION}/deploy.sh ${ENVIRONMENT}
                     fi
-                    '''
+                    """
                 }
             }
         }
@@ -49,10 +55,14 @@ pipeline {
     // post {
     //     always {
     //         script {
-    //             sh '''
+    //             sh """
     //             cd terragrunt-environments
-    //             deployments/${LOCATION}/deploy.sh ${ENVIRONMENT}
-    //             '''
+    //             if [[ -n "${TERRAFORM_MODULE}" ]]; then
+    //               deployments/${LOCATION}/post.sh ${ENVIRONMENT} ${params.terraform_module}
+    //             else
+    //               deployments/${LOCATION}/post.sh ${ENVIRONMENT}
+    //             fi
+    //             """
     //         }
     //     }
     // }

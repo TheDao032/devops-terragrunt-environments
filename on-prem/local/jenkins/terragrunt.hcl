@@ -12,9 +12,11 @@ terraform {
 dependency "vault-secrets" {
   config_path = "../vault-secrets"
   mock_outputs = {
-    output = {
-      jenkinsUsername = "value"
-      jenkinsPassword = "value"
+    jenkins_secrets = {
+      "jenkins/creds" = {
+        username = "value"
+        password = "value"
+      }
     }
   }
   mock_outputs_merge_strategy_with_state = "shallow"
@@ -36,11 +38,9 @@ inputs = {
     jenkins_hostname    = "traefik.jenkins.local.com"
     jenkins_url         = "http://traefik.jenkins.local.com/"
     jenkins_volume_size = "100Gi"
-    jenkins_username    = dependency.vault-secrets.outputs.output["jenkinsUsername"]
-    jenkins_password    = dependency.vault-secrets.outputs.output["jenkinsPassword"]
+    jenkins_username    = dependency.vault-secrets.outputs.jenkins_secrets["jenkins/creds"]["username"]
+    jenkins_password    = dependency.vault-secrets.outputs.jenkins_secrets["jenkins/creds"]["password"]
   }
-
-  secrets = dependency.vault-secrets.outputs.output
 
   jenkins_plugins = {
     kubernetes                             = "4295.v7fa_01b_309c95"

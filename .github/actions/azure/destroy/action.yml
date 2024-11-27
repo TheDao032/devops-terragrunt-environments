@@ -1,0 +1,54 @@
+name: Azure Detroy
+description: Azure Detroy
+
+inputs:
+  CLOUD:
+    required: true
+    description: Azure Cloud
+  ENV:
+    required: true
+    description: Azure Environment
+  REGION:
+    required: true
+    description: Azure Region
+  AZURE_CREDENTIALS:
+    required: true
+    description: Azure Credentails
+  SSH_PRIVATE_KEY:
+    required: true
+    description: SSH Private Key
+
+runs:
+  using: "composite"
+  steps:
+    - name: Log in with Azure
+      id: azure-login
+      uses: azure/login@v2.1.1
+      with:
+        creds: '${{ inputs.AZURE_CREDENTIALS }}'
+
+    - name: Azure Setup
+      id: azure-setup
+      shell: bash
+      run: |
+        mkdir -p /home/runner/work/_temp/_github_workflow
+        mv terragrunt.azure.hcl terragrunt.hcl
+
+    - uses: webfactory/ssh-agent@v0.7.0
+      with:
+        ssh-private-key: ${{ inputs.SSH_PRIVATE_KEY }}
+        ssh-auth-sock: "/home/runner/work/_temp/_github_workflow/ssh-agent.sock"
+
+    - name: Destroy
+      id: terragrunt-destroy
+      shell: bash
+      env:
+        SSH_AUTH_SOCK: "/github/workflow/ssh-agent.sock"
+      working-directory: ${{ inputs.CLOUD }}/${{ inputs.REGION }}/${{ inputs.ENV }}/
+      run: |
+        terragrunt run-all destroy --terragrunt-non-interactive --terragrunt-include-external-dependencies | tee "destroy-${{ inputs.CLOUD }}${{ inputs.REGION }}-${{ inputs.ENV }}.txt"
+
+    - uses: actions/upload-artifact@v3
+      with:
+        name: terragrunt-destroy
+        path: ${{ inputs.CLOUD }}/${{ inputs.REGION }}/${{ inputs.ENV }}/apply-${{ inputs.ENV }}.txt

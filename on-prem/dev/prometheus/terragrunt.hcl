@@ -1,4 +1,6 @@
 locals {
+  environment_vars = read_terragrunt_config(find_in_parent_folders("env.hcl"))
+  environment      = local.environment_vars.locals.environment
 }
 
 terraform {
@@ -9,9 +11,11 @@ terraform {
 dependency "vault-secrets" {
   config_path = "../vault-secrets"
   mock_outputs = {
-    output = {
-      grafanaUsername = "value"
-      grafanaPassword = "value"
+    grafana_secrets = {
+      "grafana/creds" = {
+        username = "value"
+        password = "value"
+      }
     }
   }
   mock_outputs_merge_strategy_with_state = "shallow"
@@ -25,37 +29,38 @@ inputs = {
   chart_version = "65.1.0"
   namespace = "monitoring"
   helm_repository = "https://prometheus-community.github.io/helm-charts"
-  helm_release_name = "prometheus-community"
+  helm_release_name = "prometheus"
   helm_release_chart = "kube-prometheus-stack"
-
-  secrets = dependency.vault-secrets.outputs.output
 
   prometheus = {
     ingress = {
-      host = "traefik.prometheus.local.com"
-      prefix = "/"
+      host = "nthedao.info"
+      prefix = "/prometheus"
       prefix_type = "Prefix"
+      strip_prefix = "prometheus-strip-prefix"
     }
   }
 
   alertmanager = {
     ingress = {
-      host = "traefik.alertmanager.local.com"
-      prefix = "/"
+      host = "nthedao.info"
+      prefix = "/alertmanager"
       prefix_type = "Prefix"
+      strip_prefix = "alertmanager-strip-prefix"
     }
   }
 
   grafana = {
     ingress = {
-      host = "traefik.grafana.local.com"
-      prefix = "/"
+      host = "nthedao.info"
+      prefix = "/grafana"
       prefix_type = "Prefix"
+      strip_prefix = "grafana-strip-prefix"
     }
 
     auth = {
-      username = dependency.vault-secrets.outputs.output["grafanaUsername"]
-      password = dependency.vault-secrets.outputs.output["grafanaPassword"]
+      username = dependency.vault-secrets.outputs.grafana_secrets["grafana/creds"]["username"]
+      password = dependency.vault-secrets.outputs.grafana_secrets["grafana/creds"]["password"]
     }
   }
 }

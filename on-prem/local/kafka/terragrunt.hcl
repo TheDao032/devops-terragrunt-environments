@@ -1,7 +1,7 @@
 locals {
   environment_vars = read_terragrunt_config(find_in_parent_folders("env.hcl"))
   environment      = local.environment_vars.locals.environment
-  secrets          = local.environment_vars.locals.secrets
+  # secrets          = local.environment_vars.locals.secrets
 }
 
 terraform {
@@ -12,8 +12,11 @@ terraform {
 dependency "vault-secrets" {
   config_path = "../vault-secrets"
   mock_outputs = {
-    output = {
-      kafkaClientPassword = "value"
+    kafka_secrets = {
+      "kafka/creds" = {
+        clientUsername = "value"
+        clientPassword = "value"
+      }
     }
   }
   mock_outputs_merge_strategy_with_state = "shallow"
@@ -28,7 +31,7 @@ inputs = {
   image_tag = "3.8.0-debian-12-r5"
   namespace = "kafka"
   helm_repository = "https://charts.bitnami.com/bitnami"
-  helm_release_name = "bitnami"
+  helm_release_name = "kafka"
   helm_release_chart = "kafka"
 
   controller_conf = {
@@ -49,7 +52,8 @@ inputs = {
 
   sasl_conf = {
     client = {
-      password: dependency.vault-secrets.outputs.output["kafkaClientPassword"]
+      username: dependency.vault-secrets.outputs.kafka_secrets["kafka/creds"]["clientUsername"]
+      password: dependency.vault-secrets.outputs.kafka_secrets["kafka/creds"]["clientPassword"]
     }
   }
 }
