@@ -26,6 +26,13 @@ locals {
     }
   }
 
+  keycloak = {
+    "keycloak/creds" : {
+      username = "admin"
+      password = "{ _RANDOM_ = 18 }"
+    }
+  }
+
   jenkins = {
     "jenkins/creds" : {
       username = "admin"
