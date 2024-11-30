@@ -6,7 +6,8 @@ locals {
 dependency "vpc" {
   config_path = "../vpc"
   mock_outputs = {
-    public_subnets = "value_1,value_2"
+    public_subnets  = "value_1,value_2"
+    private_subnets = "value_1,value_2"
   }
   mock_outputs_merge_strategy_with_state = "shallow"
 }
@@ -21,5 +22,6 @@ terraform {
 }
 
 inputs = {
-  subnet_id = split(",", dependency.vpc.outputs.public_subnets)[0]
+  public_subnet_id  = split(",", dependency.vpc.outputs.public_subnets)[0]
+  private_subnet_id = split(",", dependency.vpc.outputs.private_subnets)[0]
 }
