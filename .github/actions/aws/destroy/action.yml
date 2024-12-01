@@ -57,7 +57,7 @@ runs:
       shell: bash
       env:
         SSH_AUTH_SOCK: "/github/workflow/ssh-agent.sock"
-        SSH_PUBLIC_KEY: ${{ inpujts.SSH_PUBLIC_KEY }}
+        SSH_PUBLIC_KEY: ${{ inputs.SSH_PUBLIC_KEY }}
       working-directory: ${{ inputs.CLOUD }}/${{ inputs.ENV }}-account/${{ inputs.REGION }}/${{ inputs.ENV }}/
       run: |
         terragrunt run-all destroy --terragrunt-non-interactive --terragrunt-include-external-dependencies | tee "destroy-${{ inputs.CLOUD }}-${{ inputs.REGION }}-${{ inputs.ENV }}.txt"
