@@ -8,6 +8,8 @@ dependency "vpc" {
   mock_outputs = {
     public_subnets  = "value_1,value_2"
     private_subnets = "value_1,value_2"
+    private_sg      = "value"
+    public_sg       = "value"
   }
   mock_outputs_merge_strategy_with_state = "shallow"
 }
@@ -24,4 +26,9 @@ terraform {
 inputs = {
   public_subnet_id  = split(",", dependency.vpc.outputs.public_subnets)[0]
   private_subnet_id = split(",", dependency.vpc.outputs.private_subnets)[0]
+
+  private_sg_id = dependency.vpc.outputs.private_sg
+  public_sg_id  = dependency.vpc.outputs.public_sg
+
+  ssh_public_key = get_env("SSH_PUBLIC_KEY", "")
 }

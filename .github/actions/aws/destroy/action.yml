@@ -23,6 +23,9 @@ inputs:
   SSH_PRIVATE_KEY:
     required: true
     description: SSH Private Key
+  SSH_PUBLIC_KEY:
+    required: true
+    description: SSH Public Key
 
 runs:
   using: "composite"
@@ -54,6 +57,7 @@ runs:
       shell: bash
       env:
         SSH_AUTH_SOCK: "/github/workflow/ssh-agent.sock"
+        SSH_PUBLIC_KEY: ${{ inpujts.SSH_PUBLIC_KEY }}
       working-directory: ${{ inputs.CLOUD }}/${{ inputs.ENV }}-account/${{ inputs.REGION }}/${{ inputs.ENV }}/
       run: |
         terragrunt run-all destroy --terragrunt-non-interactive --terragrunt-include-external-dependencies | tee "destroy-${{ inputs.CLOUD }}-${{ inputs.REGION }}-${{ inputs.ENV }}.txt"
