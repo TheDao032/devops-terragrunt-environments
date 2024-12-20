@@ -10,10 +10,17 @@ ENVIRONMENT=${1:-"local"}
 MODULE=${2:-""}
 
 UTILS_DIR="deployments/utils/utils.sh"
+ENVS_DIR="deployments/utils/envs.sh"
 
 SCRIPT_ABS_PATH="$( realpath "${0}")"
 LIB_DIR="${SCRIPT_ABS_PATH%/*}/envs/${ENVIRONMENT}"
 # LIB_DIR="deployments/${LOCATION}/envs/${ENVIRONMENT}"
+
+if [ -e "${ENVS_DIR}" ]; then
+    source "${ENVS_DIR}"
+else
+    echo "The file '${ENVS_DIR}' does not exist."
+fi
 
 for LIB_FILE in "${LIB_DIR}"/*.bash; do
   source "${UTILS_DIR}"

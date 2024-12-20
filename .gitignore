@@ -44,3 +44,7 @@ terragrunt-debug.tfvars.json
 
 # Ignore macOS .DS_Store
 *.DS_Store
+
+# Ignore envs bash files
+deployments/utils/envs.sh
+terragrunt.hcl
