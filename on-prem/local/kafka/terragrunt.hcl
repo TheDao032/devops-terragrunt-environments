@@ -27,33 +27,35 @@ include {
 }
 
 inputs = {
-  chart_version = "30.1.6"
-  image_tag = "3.8.0-debian-12-r5"
-  namespace = "kafka"
-  helm_repository = "https://charts.bitnami.com/bitnami"
-  helm_release_name = "kafka"
+  chart_version      = "31.0.0"
+  image_tag          = "3.9.0-debian-12-r1"
+  namespace          = "tools"
+  helm_repository    = "https://charts.bitnami.com/bitnami"
+  helm_release_name  = "kafka"
   helm_release_chart = "kafka"
 
   controller_conf = {
     replica_count = 1
     hpa_active    = true
     mount_path    = "/bitnami/kafka/controller"
+    size          = "8Gi"
     min_replicas  = 1
-    max_replicas  = 3
+    max_replicas  = 5
   }
 
   broker_conf = {
     replica_count = 1
     hpa_active    = true
     mount_path    = "/bitnami/kafka/broker"
+    size          = "8Gi"
     min_replicas  = 1
-    max_replicas  = 3
+    max_replicas  = 5
   }
 
   sasl_conf = {
     client = {
-      username: dependency.vault-secrets.outputs.kafka_secrets["kafka/creds"]["clientUsername"]
-      password: dependency.vault-secrets.outputs.kafka_secrets["kafka/creds"]["clientPassword"]
+      username : dependency.vault-secrets.outputs.kafka_secrets["kafka/creds"]["clientUsername"]
+      password : dependency.vault-secrets.outputs.kafka_secrets["kafka/creds"]["clientPassword"]
     }
   }
 }

@@ -22,15 +22,20 @@ done
 
 APPLY_LOG_FILE_NAME=${3:-"init-${ENVIRONMENT}.log"}
 
+# Clear Terraform and Terragrunt cache
+# log_info "$(date -u) - INFO - Clearing Terraform and Terragrunt cache"
+# find . -name ".terraform" -type d -exec rm -rf {} +
+# find . -name ".terragrunt-cache" -type d -exec rm -rf {} +
+
 if [[ -n "${MODULE}" ]]; then
   cd ${LOCATION}/${ENVIRONMENT}/${MODULE}
 
-  terragrunt apply -auto-approve -no-color --terragrunt-non-interactive --terragrunt-include-external-dependencies 2>&1 | tee /tmp/terragrunt-apply.log
+  terragrunt apply -auto-approve -no-color --terragrunt-non-interactive --terragrunt-include-external-dependencies --terragrunt-debug 2>&1 | tee /tmp/terragrunt-apply.log
 else
   # Run apply all and display output both to terminal and the log file temp.log
   cd ${LOCATION}/${ENVIRONMENT}
 
-  terragrunt run-all apply -auto-approve -no-color --terragrunt-non-interactive --terragrunt-include-external-dependencies 2>&1 | tee /tmp/terragrunt-apply.log
+  terragrunt run-all apply -auto-approve -no-color --terragrunt-non-interactive --terragrunt-include-external-dependencies --terragrunt-debug 2>&1 | tee /tmp/terragrunt-apply.log
 fi
 
 log_path=/tmp/terragrunt

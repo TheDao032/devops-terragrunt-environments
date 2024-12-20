@@ -25,12 +25,12 @@ DESTROY_LOG_FILE_NAME=${3:-"init-${ENVIRONMENT}.log"}
 if [[ -n "${MODULE}" ]]; then
   cd ${LOCATION}/${ENVIRONMENT}/${MODULE}
 
-  terragrunt destroy -auto-approve -no-color --terragrunt-non-interactive --terragrunt-include-external-dependencies 2>&1 | tee /tmp/terragrunt-destroy.log
+  terragrunt destroy -auto-approve -no-color --terragrunt-non-interactive --terragrunt-include-external-dependencies --terragrunt-debug 2>&1 | tee /tmp/terragrunt-destroy.log
 else
   # Run destroy all and display output both to terminal and the log file temp.log
   cd ${LOCATION}/${ENVIRONMENT}
 
-  terragrunt run-all destroy -auto-approve -no-color --terragrunt-non-interactive --terragrunt-include-external-dependencies 2>&1 | tee /tmp/terragrunt-destroy.log
+  terragrunt run-all destroy -auto-approve -no-color --terragrunt-non-interactive --terragrunt-include-external-dependencies --terragrunt-debug 2>&1 | tee /tmp/terragrunt-destroy.log
 fi
 
 log_path=/tmp/terragrunt

@@ -26,10 +26,29 @@ locals {
     }
   }
 
+  ldap = {
+    "ldap/params" = {
+      ldap_server_url = get_env("LDAP_SERVER_URL", "http://192.168.1.146:389")
+    }
+    "ldap/creds" = {
+      ldap_provider_bind_credential     = get_env("LDAP_PROVIDER_BIND_CREDENTIAL", "admin_pass")
+      ldap_provider_bind_dn             = get_env("LDAP_PROVIDER_BIND_DN", "cn=admin,dc=nthedao,dc=info")
+      ldap_provider_users_dn            = get_env("LDAP_PROVIDER_USERS_DN", "cn=dev,ou=users,dc=nthedao,dc=info")
+      ldap_provider_user_object_classes = get_env("LDAP_PROVIDER_USER_OBJECT_CLASSES", "inetOrgPerson,posixAccount,top,organizationalPerson,person")
+    }
+  }
+
   keycloak = {
+    "keycloak/params" = {
+    }
     "keycloak/creds" = {
       username = "admin"
       password = "{ _RANDOM_ = 18 }"
+
+      kafka_ui_client_id     = "kafka-ui"
+      kafka_ui_client_name   = "kafka-ui"
+      kafka_ui_client_secret = "{ _RANDOM_ = 32 }"
+
     }
   }
 
@@ -69,10 +88,18 @@ locals {
       DBClusterEndpoint = get_env("DB_CLUSTER_ENDPOINT", "192.168.56.31")
       DBClusterPort     = 5432
     }
+
     "Database/fiesta/creds" = {
       username = "fiesta"
       password = "{ _RANDOM_ = 18 }"
       database = "fiesta"
+    }
+
+    "Database/keycloak/creds" = {
+      pg_pass  = "{ _RANDOM_ = 18 }"
+      password = "{ _RANDOM_ = 18 }"
+      username = "bn_keycloak"
+      database = "keycloak"
     }
   }
 
