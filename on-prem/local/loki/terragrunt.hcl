@@ -39,6 +39,12 @@ inputs = {
   alloy_helm_release_chart = "alloy"
 
   loki_conf = {
+    loki_ingress = {
+      host         = "loki.nthedao.info"
+      prefix       = "/loki"
+      prefix_type  = "Prefix"
+      strip_prefix = "loki-strip-prefix"
+    }
     querier = {
       max_concurrent = 1
     }
