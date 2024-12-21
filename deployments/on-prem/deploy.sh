@@ -16,14 +16,20 @@ SCRIPT_ABS_PATH="$( realpath "${0}")"
 LIB_DIR="${SCRIPT_ABS_PATH%/*}/envs/${ENVIRONMENT}"
 # LIB_DIR="deployments/${LOCATION}/envs/${ENVIRONMENT}"
 
+if [ -e "${UTILS_DIR}" ]; then
+    source "${UTILS_DIR}"
+else
+    echo "The file '${UTILS_DIR}' does not exist."
+fi
+
 if [ -e "${ENVS_DIR}" ]; then
-    source "${ENVS_DIR}"
+    source "${ENVS_DIR}" ${ENVIRONMENT}
 else
     echo "The file '${ENVS_DIR}' does not exist."
 fi
 
 for LIB_FILE in "${LIB_DIR}"/*.bash; do
-  source "${UTILS_DIR}"
+  # source "${UTILS_DIR}"
   source "${LIB_FILE}" ${ENVIRONMENT} || { log_info "$(date -u) - FATAL - failure occured while reading ${LIB_FILE}"; exit 1; }
 done
 
