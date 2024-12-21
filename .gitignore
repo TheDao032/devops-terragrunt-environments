@@ -47,4 +47,4 @@ terragrunt-debug.tfvars.json
 
 # Ignore envs bash files
 deployments/utils/envs.sh
-terragrunt.hcl
+# terragrunt.hcl
