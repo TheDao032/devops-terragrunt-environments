@@ -26,6 +26,19 @@ locals {
     }
   }
 
+  query_service = {
+    "query_service/params" = {
+      query_service_port                = get_env("QUERY_SERVICE_PORT")
+      query_service_name                = get_env("QUERY_SERVICE_NAME")
+      query_service_time_interval       = get_env("QUERY_SERVICE_TIME_INTERVAL")
+      query_service_opn_legacy_org      = get_env("QUERY_SERVICE_OPN_LEGACY_ORG")
+      query_service_material_legacy_org = get_env("QUERY_SERVICE_MATERIAL_LEGACY_ORG")
+      java_ops_xms                      = get_env("JAVA_OPS_XMS")
+    }
+    "query_service/creds" = {
+    }
+  }
+
   ldap = {
     "ldap/params" = {
       ldap_server_url = get_env("LDAP_SERVER_URL", "http://192.168.1.146:389")
