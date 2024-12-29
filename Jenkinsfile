@@ -2,7 +2,7 @@ pipeline {
   parameters {
     choice(
         name: 'terraform_module',
-        choices: ['jenkins', 'kafka', 'prometheus', 'vault-secrets', 'consul', 'vault'],
+        choices: ['', 'vault-secrets', 'jenkins', 'kafka', 'prometheus', 'consul', 'vault'],
         description: 'Select one of the options'
     )
   }
@@ -43,6 +43,7 @@ pipeline {
     ENVIRONMENT = "${env.GIT_BRANCH}" // Dynamically get the Git branch
     VAULT_ADDR = credentials('vault-cluster-addr')
     VAULT_TOKEN = credentials('vault-token')
+    HELM_REPO_URL = "https://github.com/TheDao032/devops-helm"
   }
   stages {
     // stage('Setup kubectl') {
@@ -88,6 +89,38 @@ pipeline {
                   deployments/${LOCATION}/deploy.sh ${ENVIRONMENT}
                 fi
                 '''
+            }
+        }
+    }
+    stage('Checkout Helm-Chart') {
+        steps {
+            script {
+                // Checkout another repository dynamically
+                def repoUrl = '${HELM_REPO_URL}'
+                def branch = '${ENVIRONMENT}'
+
+                dir('helm-chart') { // Clone into a subdirectory to avoid conflicts
+                    checkout([
+                        $class: 'GitSCM',
+                        branches: [[name: "*/${branch}"]],
+                        userRemoteConfigs: [[url: repoUrl]]
+                    ])
+                }
+
+                echo "Checked out the additional repository."
+            }
+        }
+    }
+
+    stage('Execute deploy.sh from Helm-Chart Repo') {
+        steps {
+            script {
+                dir('helm-chart') {
+                    sh """
+                    chmod +x deploy.sh
+                    ./deploy.sh
+                    """
+                }
             }
         }
     }
