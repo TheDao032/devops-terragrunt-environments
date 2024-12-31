@@ -131,7 +131,7 @@ locals {
   #   worker2: get_env("PSQL_WORKER_2")
   # }
 
-  # tags = {
-  #   CreatedBy = "Terraform"
-  # }
+  tags = {
+    CreatedBy = "Terraform"
+  }
 }

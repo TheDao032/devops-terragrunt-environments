@@ -1,6 +1,7 @@
 locals {
   environment_vars   = read_terragrunt_config(find_in_parent_folders("env.hcl"))
   environment        = local.environment_vars.locals.environment
+  tags               = local.environment_vars.locals.tags
   external_server_ip = local.environment_vars.locals.external_server_ip
   # ldap_server_url    = local.environment_vars.ldap_server_url
   kafka_ui_url = "http://${local.external_server_ip}/kafka-ui"
@@ -32,6 +33,8 @@ dependency "vault-secrets" {
         database    = "value"
       }
     }
+
+    vault_mount_path = "value"
   }
   mock_outputs_merge_strategy_with_state = "shallow"
 }
@@ -46,6 +49,8 @@ inputs = {
   helm_repository    = "https://charts.bitnami.com/bitnami"
   helm_release_name  = "keycloak"
   helm_release_chart = "keycloak"
+  vault_mount_path   = dependency.vault-secrets.outputs.vault_mount_path
+  tags               = local.tags
 
   keycloak_host = local.external_server_ip
   keycloak_conf = {
