@@ -1,0 +1,17 @@
+#!/bin/bash
+
+set -euo pipefail
+
+export AGILE_DB_URL=${AGILE_DB_URL:-"optagiledb001d.opt.renesas.com"}
+export AGILE_DB_SID=${AGILE_DB_SID:-"DEV"}
+export AGILE_DB_PORT=${AGILE_DB_PORT:-1521}
+export AGILE_DB_JDBC_CONNECTION_STRING="jdbc:oracle:thin:@${AGILE_DB_URL}:${AGILE_DB_PORT}:${AGILE_DB_SID}"
+export AGILE_DB_USERNAME=${AGILE_DB_USERNAME:-"agiledev"}
+export AGILE_DB_PASSWORD=${AGILE_DB_PASSWORD:-"Agile#2024.Dev"}
+
+export CORP_AGILE_DB_URL=${CORP_AGILE_DB_URL:-"corpagldbdv3.corp.idt.com"}
+export CORP_AGILE_DB_PORT=${CORP_AGILE_DB_PORT:-1521}
+export CORP_AGILE_DB_SID=${CORP_AGILE_DB_SID:-"agldev"}
+export CORP_AGILE_DB_JDBC_CONNECTION_STRING="jdbc:oracle:thin:@${CORP_AGILE_DB_URL}:${CORP_AGILE_DB_PORT}:${CORP_AGILE_DB_SID}"
+export CORP_AGILE_DB_USERNAME=${CORP_AGILE_DB_USERNAME:-"agile"}
+export CORP_AGILE_DB_PASSWORD=${CORP_AGILE_DB_PASSWORD:-"a9ile4idT"}
