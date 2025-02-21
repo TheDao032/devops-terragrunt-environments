@@ -13,11 +13,20 @@ locals {
       registry = get_env("ARTIFACTORY_REGISTRY", "nthedao")
     }
 
+    # Only for k3d local kubernetes cluster
+    # "k3s/creds" = {
+    #   client_ca_crt = get_env("KUBE_CLUSTER_CA_CERT_DATA")
+    #   host          = get_env("KUBE_HOST")
+    #   client_crt    = get_env("KUBE_CLIENT_CERT_DATA")
+    #   client_key    = get_env("KUBE_CLIENT_KEY_DATA")
+    #   token         = get_env("KUBE_TOKEN")
+    # }
+
+    # server-2                = get_env("K3S_SERVER_2")
+    # agent-2                 = get_env("K3S_AGENT_2")
     "k3s/params" = {
       server-1                = get_env("K3S_SERVER_1")
-      server-2                = get_env("K3S_SERVER_2")
       agent-1                 = get_env("K3S_AGENT_1")
-      agent-2                 = get_env("K3S_AGENT_2")
       api_endpoint            = get_env("K3S_SERVER_1")
       keepalived_virtual_ip   = get_env("KEEPALIVED_VIRTUAL_IP")
       keepalived_nw_interface = get_env("KEEPALIVED_NW_INTERFACE")

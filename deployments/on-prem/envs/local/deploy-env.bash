@@ -14,11 +14,13 @@ export VAULT_TOKEN=${VAULT_TOKEN:-""}
 export VAULT_SKIP_VERIFY=true
 vault login -address=${VAULT_ADDR} -method=token $(echo ${VAULT_TOKEN})
 
+# Comment out all the KUBE_* config when testing wiht k3d kubernetes cluster
 export KUBE_CLIENT_KEY_DATA=$(vault kv get -field=client_key ${K3S_SECRETS_PATH})
 export KUBE_CLIENT_CERT_DATA=$(vault kv get -field=client_crt ${K3S_SECRETS_PATH})
 export KUBE_CLUSTER_CA_CERT_DATA=$(vault kv get -field=client_ca_crt ${K3S_SECRETS_PATH})
 export KUBE_TOKEN=$(vault kv get -field=token ${K3S_SECRETS_PATH})
 export KUBE_HOST=$(vault kv get -field=host ${K3S_SECRETS_PATH})
+
 export CLOUDFLARE_API_TOKEN=${CLOUDFLARE_API_TOKEN:-""}
 
 

@@ -1,7 +1,7 @@
 FROM ubuntu:latest
 
-ENV TERRAFORM_VERSION 1.9.8
-ENV TERRAGRUNT_VERSION 0.69.0
+ENV TERRAFORM_VERSION=1.10.5
+ENV TERRAGRUNT_VERSION=0.73.8
 
 RUN apt update -y && apt install -y unzip wget curl python3 python3-pip apt-transport-https ca-certificates gnupg git openssh-client
 
