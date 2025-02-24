@@ -21,16 +21,25 @@ dependency "vault-secrets" {
   mock_outputs_merge_strategy_with_state = "shallow"
 }
 
+dependency "loki" {
+  config_path = "../loki"
+  mock_outputs = {
+    internal_loki_server = "value"
+  }
+  mock_outputs_merge_strategy_with_state = "shallow"
+}
+
 include {
   path = find_in_parent_folders()
 }
 
 inputs = {
-  chart_version      = "65.1.0"
-  namespace          = "monitoring"
-  helm_repository    = "https://prometheus-community.github.io/helm-charts"
-  helm_release_name  = "prometheus"
-  helm_release_chart = "kube-prometheus-stack"
+  chart_version        = "65.1.0"
+  namespace            = "monitoring"
+  helm_repository      = "https://prometheus-community.github.io/helm-charts"
+  helm_release_name    = "prometheus"
+  helm_release_chart   = "kube-prometheus-stack"
+  internal_loki_server = dependency.loki.outputs.internal_loki_server
 
   prometheus = {
     ingress = {
