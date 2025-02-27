@@ -9,28 +9,18 @@ terraform {
   # source = "git::git@github.com:TheDao032/devops-terraform-modules.git//on-prem/kafka?ref=${local.environment}"
 }
 
-# dependency "vault-secrets" {
-#   config_path = "../vault-secrets"
-#   mock_outputs = {
-#     kafka_secrets = {
-#       "kafka/creds" = {
-#         clientUsername = "value"
-#         clientPassword = "value"
-#       }
-#     }
-#   }
-#   mock_outputs_merge_strategy_with_state = "shallow"
-# }
-
-# dependency "prometheus" {
-#   config_path = "../prometheus"
-#   mock_outputs = {
-#     kafka_secrets = {
-#       clientPassword = "value"
-#     }
-#   }
-#   mock_outputs_merge_strategy_with_state = "shallow"
-# }
+dependency "vault-secrets" {
+  config_path = "../vault-secrets"
+  mock_outputs = {
+    secrets = {
+      "loki/creds" = {
+        username = "value"
+        password = "value"
+      }
+    }
+  }
+  mock_outputs_merge_strategy_with_state = "shallow"
+}
 
 include {
   path = find_in_parent_folders()
@@ -47,6 +37,12 @@ inputs = {
   alloy_chart_version      = "0.10.0"
   alloy_helm_release_name  = "alloy"
   alloy_helm_release_chart = "alloy"
+
+
+  auth_conf = {
+    username = dependency.vault-secrets.outputs.secrets["loki/creds"]["username"]
+    password = dependency.vault-secrets.outputs.secrets["loki/creds"]["password"]
+  }
 
   common_conf = {
     ingress = {

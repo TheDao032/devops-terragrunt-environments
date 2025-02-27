@@ -11,7 +11,7 @@ terraform {
 dependency "vault-secrets" {
   config_path = "../vault-secrets"
   mock_outputs = {
-    grafana_secrets = {
+    secrets = {
       "grafana/creds" = {
         username = "value"
         password = "value"
@@ -68,8 +68,8 @@ inputs = {
     }
 
     auth = {
-      username = dependency.vault-secrets.outputs.grafana_secrets["grafana/creds"]["username"]
-      password = dependency.vault-secrets.outputs.grafana_secrets["grafana/creds"]["password"]
+      username = dependency.vault-secrets.outputs.secrets["grafana/creds"]["username"]
+      password = dependency.vault-secrets.outputs.secrets["grafana/creds"]["password"]
     }
   }
 }

@@ -79,6 +79,11 @@ locals {
       password = "{ _RANDOM_ = 18 }"
     }
 
+    "loki/creds" = {
+      username = "admin"
+      password = "{ _RANDOM_ = 18 }"
+    }
+
     "kafka/creds" = {
       clientUsername = "admin"
       clientPassword = "{ _RANDOM_ = 18 }"
