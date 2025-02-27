@@ -68,8 +68,6 @@ inputs = {
       }
     }
 
-    deploymentMode = "Distributed"
-
     ingester = {
       replicas = 1
     }
@@ -147,70 +145,11 @@ inputs = {
       storage = {
         type = "filesystem"
       }
-
-      querier = {
-        max_concurrent = 4
-      }
-    }
-
-    deploymentMode = "Distributed"
-
-    ingester = {
-      replicas = 1
-    }
-    querier = {
-      replicas = 1
-    }
-    query_frontend = {
-      replicas        = 1
-      max_unavailable = 1
-    }
-    query_scheduler = {
-      replicas = 1
-    }
-    distributor = {
-      replicas        = 1
-      max_unavailable = 1
-    }
-    compactor = {
-      replicas = 1
-    }
-    index_gateway = {
-      replicas        = 1
-      max_unavailable = 1
-    }
-
-    bloom_planner = {
-      replicas = 0
-    }
-    bloom_builder = {
-      replicas = 0
-    }
-    bloom_gateway = {
-      replicas = 0
-    }
-
-    write = {
-      replicas = 0
-    }
-    read = {
-      replicas = 0
-    }
-    backend = {
-      replicas = 0
     }
 
     singleBinary = {
       replicas = 0
     }
-
-    # ruler = {
-    #   replicas       = 1
-    #   max_unavailable = 1
-    #   storage = {
-    #     type = "filesystem"
-    #   }
-    # }
 
     memcached = {
       rq_mem     = "128Mi"
@@ -228,48 +167,19 @@ inputs = {
   }
 
   scalable_conf = {
-    loki_ingress = {
-      host         = "loki.nthedao.info"
-      prefix       = "/loki"
-      prefix_type  = "Prefix"
-      strip_prefix = "loki-strip-prefix"
-    }
-
     querier = {
       max_concurrent = 2
     }
-    query_frontend = {
-      replicas        = 1
-      max_unavailable = 1
-    }
-    query_scheduler = {
-      replicas : 1
-    }
-    distributor = {
-      replicas        = 1
-      max_unavailable = 1
-    }
-    compactor = {
-      replicas = 1
-    }
-    ruler = {
-      replicas        = 1
-      max_unavailable = 1
-    }
-    index_gateway = {
-
-    }
-
     write = {
-      replicas        = 0
+      replicas        = 1
       persistent_size = "10Gi"
     }
     read = {
-      replicas        = 0
+      replicas        = 1
       persistent_size = "10Gi"
     }
     backend = {
-      replicas        = 0
+      replicas        = 2
       persistent_size = "10Gi"
     }
 
