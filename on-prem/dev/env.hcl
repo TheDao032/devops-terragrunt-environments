@@ -6,6 +6,7 @@ locals {
   vault_token       = local.vault_config_vars.locals.token
 
   environment        = "dev"
+  cluster_name       = "cluster.local"
   external_server_ip = get_env("K3S_SERVER_1")
 
   k3s = {
