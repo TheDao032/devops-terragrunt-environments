@@ -58,21 +58,16 @@ inputs = {
   }
 
   microservice_conf = {
-    loki = {
-      storage = {
-        type = "filesystem"
-      }
-
-      querier = {
-        max_concurrent = 4
-      }
+    storage = {
+      type = "filesystem"
     }
 
     ingester = {
       replicas = 1
     }
     querier = {
-      replicas = 1
+      replicas       = 1
+      max_concurrent = 4
     }
     query_frontend = {
       replicas        = 1
@@ -141,10 +136,8 @@ inputs = {
   }
 
   monolithic_conf = {
-    loki = {
-      storage = {
-        type = "filesystem"
-      }
+    storage = {
+      type = "filesystem"
     }
 
     singleBinary = {
