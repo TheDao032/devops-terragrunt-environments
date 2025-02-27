@@ -1,6 +1,7 @@
 locals {
   environment_vars = read_terragrunt_config(find_in_parent_folders("env.hcl"))
   environment      = local.environment_vars.locals.environment
+  cluster_name     = local.environment_vars.locals.cluster_name
   # secrets          = local.environment_vars.locals.secrets
 }
 
@@ -37,6 +38,7 @@ inputs = {
   alloy_chart_version      = "0.10.0"
   alloy_helm_release_name  = "alloy"
   alloy_helm_release_chart = "alloy"
+  cluster_name             = local.cluster_name
 
 
   auth_conf = {
