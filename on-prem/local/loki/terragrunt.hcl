@@ -66,8 +66,9 @@ inputs = {
       replicas = 1
     }
     querier = {
-      replicas       = 1
-      max_concurrent = 4
+      replicas        = 1
+      max_concurrent  = 4
+      max_unavailable = 1
     }
     query_frontend = {
       replicas        = 1
