@@ -109,7 +109,7 @@ inputs = {
       replicas = 0
     }
 
-    singleBinary = {
+    single_inary = {
       replicas = 0
     }
 
