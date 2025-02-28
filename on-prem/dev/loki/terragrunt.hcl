@@ -48,6 +48,7 @@ inputs = {
   }
 
   common_conf = {
+    auth_enabled = true
     ingress = {
       host         = "loki.nthedao.info"
       prefix       = "/loki"
@@ -62,10 +63,10 @@ inputs = {
     }
 
     ingester = {
-      replicas = 3
+      replicas = 2
     }
     querier = {
-      replicas        = 3
+      replicas        = 2
       max_concurrent  = 4
       max_unavailable = 2
     }
@@ -77,7 +78,7 @@ inputs = {
       replicas = 2
     }
     distributor = {
-      replicas        = 3
+      replicas        = 2
       max_unavailable = 2
     }
     compactor = {
