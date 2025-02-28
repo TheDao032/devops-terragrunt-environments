@@ -48,7 +48,9 @@ inputs = {
   }
 
   common_conf = {
-    auth_enabled = true
+    loki = {
+      auth_enabled = true
+    }
     ingress = {
       host         = "loki.nthedao.info"
       prefix       = "/loki"
