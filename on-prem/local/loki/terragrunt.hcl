@@ -62,29 +62,29 @@ inputs = {
     }
 
     ingester = {
-      replicas = 1
+      replicas = 3
     }
     querier = {
-      replicas        = 1
+      replicas        = 3
       max_concurrent  = 4
-      max_unavailable = 1
+      max_unavailable = 2
     }
     query_frontend = {
       replicas        = 1
       max_unavailable = 1
     }
     query_scheduler = {
-      replicas = 1
+      replicas = 2
     }
     distributor = {
-      replicas        = 1
-      max_unavailable = 1
+      replicas        = 3
+      max_unavailable = 2
     }
     compactor = {
       replicas = 1
     }
     index_gateway = {
-      replicas        = 1
+      replicas        = 2
       max_unavailable = 1
     }
 
