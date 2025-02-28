@@ -42,7 +42,7 @@ inputs = {
 
 
   auth_conf = {
-    is_enabled = true
+    is_enabled = false
     username   = dependency.vault-secrets.outputs.secrets["loki/creds"]["username"]
     password   = dependency.vault-secrets.outputs.secrets["loki/creds"]["password"]
   }
