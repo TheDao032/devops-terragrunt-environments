@@ -72,8 +72,8 @@ inputs = {
       chart_version      = "7.8.10"
       namespace          = "gitops"
       helm_repository    = "https://argoproj.github.io/argo-helm"
-      helm_release_name  = "argo"
-      helm_release_chart = "argo"
+      helm_release_name  = "argo-cd"
+      helm_release_chart = "argo-cd"
     }
   }
 }
