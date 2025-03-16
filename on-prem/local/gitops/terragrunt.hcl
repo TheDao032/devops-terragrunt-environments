@@ -36,7 +36,7 @@ inputs = {
     chart_info = {
       chart_version      = "5.7.3"
       image_tag          = "2.479-jdk17"
-      namespace          = "jenkins"
+      namespace          = "gitops"
       helm_repository    = "https://charts.jenkins.io/"
       helm_release_name  = "jenkins"
       helm_release_chart = "jenkins"
@@ -69,12 +69,11 @@ inputs = {
 
   argocd_conf = {
     chart_info = {
-      chart_version      = "5.7.3"
-      image_tag          = "2.479-jdk17"
-      namespace          = "jenkins"
-      helm_repository    = "https://charts.jenkins.io/"
-      helm_release_name  = "jenkins"
-      helm_release_chart = "jenkins"
+      chart_version      = "7.8.10"
+      namespace          = "gitops"
+      helm_repository    = "https://argoproj.github.io/argo-helm"
+      helm_release_name  = "argo"
+      helm_release_chart = "argo"
     }
   }
 }
