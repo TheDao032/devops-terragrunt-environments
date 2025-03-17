@@ -5,7 +5,7 @@ locals {
 }
 
 terraform {
-  source = "../../../../terraform-modules//on-prem/gitops"
+  source = "../../../../terraform-modules//on-prem/k3s"
   # source = "git::git@github.com:TheDao032/demo-terraform-modules.git//amazon-web-service/eks?ref=${local.environment}"
 }
 
