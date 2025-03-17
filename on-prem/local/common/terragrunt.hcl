@@ -32,4 +32,7 @@ include {
 }
 
 inputs = {
+  traefik_conf = {
+    namespace = "kube-system"
+  }
 }
