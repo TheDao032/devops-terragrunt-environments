@@ -104,16 +104,16 @@ inputs = {
         {
           ingress_route_name = "argocd-ingressroute"
           match_condition    = "PathPrefix(`/argocd`)"
-          namespace          = var.namespace
+          namespace          = "gitops"
           services = [
             {
-              name      = "${var.name}-argocd-server"
+              name      = "argo-cd-argocd-server"
               port      = 80
-              namespace = var.namespace
+              namespace = "gitops"
             }
           ]
 
-          middleware_annotations = join(",", [for middleware in local.middleware_combined_list : "${var.namespace}-${middleware.name}@kubernetescrd"])
+          middleware_annotations = join(",", [for middleware in local.middleware_combined_list : "gitops-${middleware.name}@kubernetescrd"])
           middlewares = flatten([for middleware in local.middleware_combined_list : {
             name      = middleware.name
             namespace = middleware.namespace
