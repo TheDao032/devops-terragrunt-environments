@@ -74,6 +74,13 @@ inputs = {
       release_name  = "argo-cd"
     }
 
+    ingress_route = {
+      host         = "nthedao.info"
+      prefix       = "/argocd"
+      prefix_type  = "Prefix"
+      strip_prefix = "argocd-strip-prefix"
+    }
+
     values = {}
   }
 }
