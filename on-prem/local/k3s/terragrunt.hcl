@@ -2,6 +2,27 @@ locals {
   environment_vars = read_terragrunt_config(find_in_parent_folders("env.hcl"))
   environment      = local.environment_vars.locals.environment
   # secrets          = local.environment_vars.locals.secrets
+
+  middleware_strip_prefix_list = [
+    {
+      name      = "argocd-strip-prefix"
+      prefixes  = ["/argocd"]
+      namespace = "gitops"
+    },
+  ]
+
+  # middleware_headers_list = [
+  #   {
+  #     name      = var.parameters.ingress.strip_prefix
+  #     namespace = var.namespace
+  #   },
+  # ]
+
+  middleware_combined_list = concat(
+    local.middleware_strip_prefix_list,
+    # local.middleware_headers_list,
+  )
+
 }
 
 terraform {
@@ -74,13 +95,31 @@ inputs = {
       release_name  = "argo-cd"
     }
 
-    ingress_route = {
-      host         = "nthedao.info"
-      prefix       = "/argocd"
-      prefix_type  = "Prefix"
-      strip_prefix = "argocd-strip-prefix"
-    }
-
     values = {}
+
+    routes = {
+      middleware_strip_prefix_list = local.middleware_strip_prefix_list
+      middleware_combined_list     = local.middleware_combined_list
+      ingressroute_list = [
+        {
+          ingress_route_name = "argocd-ingressroute"
+          match_condition    = "PathPrefix(`/argocd`)"
+          namespace          = var.namespace
+          services = [
+            {
+              name      = "${var.name}-argocd-server"
+              port      = 80
+              namespace = var.namespace
+            }
+          ]
+
+          middleware_annotations = join(",", [for middleware in local.middleware_combined_list : "${var.namespace}-${middleware.name}@kubernetescrd"])
+          middlewares = flatten([for middleware in local.middleware_combined_list : {
+            name      = middleware.name
+            namespace = middleware.namespace
+          }])
+        }
+      ]
+    }
   }
 }
