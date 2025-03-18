@@ -71,7 +71,7 @@ inputs = {
       chart_version = "7.8.10"
       namespace     = "gitops"
       repository    = "https://argoproj.github.io/argo-helm"
-      release_name  = "argocd"
+      release_name  = "argo-cd"
     }
 
     values = {}
