@@ -75,7 +75,8 @@ inputs = {
     }
 
     values = {
-      baseref = "/argocd"
+      baseref  = "/argo-cd"
+      rootpath = "/argo-cd"
     }
   }
 }
