@@ -74,6 +74,8 @@ inputs = {
       release_name  = "argo-cd"
     }
 
-    values = {}
+    values = {
+      baseref = "/argocd"
+    }
   }
 }
