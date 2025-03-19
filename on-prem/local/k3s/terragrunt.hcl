@@ -18,10 +18,10 @@ dependency "vault-secrets" {
         password = "value"
       }
 
-      # "argocd/creds" = {
-      #   username = "value"
-      #   password = "value"
-      # }
+      "argocd/creds" = {
+        username = "value"
+        password = "value"
+      }
     }
   }
   mock_outputs_merge_strategy_with_state = "shallow"
@@ -75,8 +75,9 @@ inputs = {
     }
 
     values = {
-      baseref  = "/argo-cd"
-      rootpath = "/argo-cd"
+      baseref        = "/"
+      rootpath       = "/"
+      admin_password = dependency.vault-secrets.outputs.secrets["argocd/creds"]["password"]
     }
   }
 }

@@ -70,6 +70,11 @@ locals {
       clientSecret = "{ _RANDOM_ = 32 }"
     }
 
+    "argocd/creds" = {
+      username = "admin"
+      password = "{ _RANDOM_ = 18 }"
+    }
+
     "jenkins/creds" = {
       username = "admin"
       password = "{ _RANDOM_ = 18 }"
