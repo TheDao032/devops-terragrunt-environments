@@ -77,8 +77,8 @@ inputs = {
     values = {
       baseref         = "/argo-cd"
       rootpath        = "/argo-cd"
-      midl_prefix     = "/argo-cd"
-      ingroute_prefix = "/argo-cd"
+      midl_prefix     = "/"
+      ingroute_prefix = "/"
       admin_password  = dependency.vault-secrets.outputs.secrets["argocd/creds"]["password"]
     }
   }
