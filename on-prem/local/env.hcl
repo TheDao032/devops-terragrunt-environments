@@ -5,13 +5,45 @@ locals {
   vault_address     = local.vault_config_vars.locals.address
   vault_token       = local.vault_config_vars.locals.token
 
+  backend_vars            = read_terragrunt_config(find_in_parent_folders("backend.hcl"))
+  backend_docker_registry = local.backend_vars.locals.docker_registry
+  backend_docker_username = local.backend_vars.locals.docker_username
+  backend_docker_token    = local.backend_vars.locals.docker_token
+  backend_docker_email    = local.backend_vars.locals.docker_email
+
+  backend_gitops_url   = local.backend_vars.locals.gitops_url
+  backend_ssh_priv_key = local.backend_vars.locals.ssh_private_key
+
+  backend_artifactory_registry = local.backend_vars.locals.artifactory_registry
+
   environment        = "local"
   cluster_name       = "local"
   external_server_ip = get_env("K3S_SERVER_1")
 
   secrets = {
     "artifactory/params" = {
-      registry = get_env("ARTIFACTORY_REGISTRY", "nthedao")
+      registry = local.backend_artifactory_registry
+    }
+
+    "docker/creds" = {
+      username = local.backend_docker_username
+      password = local.backend_docker_token
+      email    = local.backend_docker_email
+    }
+
+    "docker/params" = {
+      registry = local.backend_docker_registry
+    }
+
+    "github/params" = {
+      url         = local.backend_gitops_url
+      gitops_repo = "gitops-apps"
+      insecure    = "false"
+      enablelfs   = "false"
+    }
+
+    "github/creds" = {
+      ssh_priv_key = local.backend_ssh_priv_key
     }
 
     # Only for k3d local kubernetes cluster
@@ -68,6 +100,9 @@ locals {
       clientName   = "query-service"
       clientPrefix = "/query"
       clientSecret = "{ _RANDOM_ = 32 }"
+    }
+
+    "argocd/params" = {
     }
 
     "argocd/creds" = {
@@ -168,6 +203,10 @@ locals {
       queryServiceOpnLegacyOrg      = get_env("QUERY_SERVICE_OPN_LEGACY_ORG")
       queryServiceMaterialLegacyOrg = get_env("QUERY_SERVICE_MATERIAL_LEGACY_ORG")
       javaOpsXms                    = get_env("JAVA_OPS_XMS")
+    }
+
+    "podRestartCollector/creds" = {
+      slackWebhookUrl = get_env("SLACK_WEBHOOK_URL")
     }
   }
 

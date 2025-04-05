@@ -1,0 +1,5 @@
+#!/bin/bash
+
+set -euo pipefail
+
+export SLACK_WEBHOOK_URL=${SLACK_WEBHOOK_URL:-"https://hooks.slack.com/services/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"}

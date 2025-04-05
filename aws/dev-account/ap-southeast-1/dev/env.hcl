@@ -2,7 +2,7 @@
 # feed forward to the child modules.
 locals {
   environment    = "dev"
-  azs            = ["ap-southeast-1a"]
+  azs            = ["us-east-1a"]
   vpc_cidr_block = "10.1.0.0/16"
   public_cidr    = ["10.1.10.0/24"]
   private_cidr   = ["10.1.20.0/24"]
