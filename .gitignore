@@ -49,4 +49,6 @@ terragrunt-debug.tfvars.json
 # deployments/utils/envs.sh
 # terragrunt.hcl
 
-# **/**/*.env.properties
+deployments/**/*.bash
+
+jenkins-envs/**/*.env.properties
