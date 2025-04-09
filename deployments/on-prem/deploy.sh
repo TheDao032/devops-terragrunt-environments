@@ -43,12 +43,14 @@ APPLY_LOG_FILE_NAME=${3:-"init-${ENVIRONMENT}.log"}
 if [[ -n "${MODULE}" ]]; then
   cd ${LOCATION}/${ENVIRONMENT}/${MODULE}
 
-  terragrunt apply -auto-approve -no-color --terragrunt-non-interactive --terragrunt-include-external-dependencies --terragrunt-debug 2>&1 | tee /tmp/terragrunt-apply.log
+  terragrunt apply -auto-approve -no-color --terragrunt-non-interactive --terragrunt-include-external-dependencies 2>&1 | tee /tmp/terragrunt-apply.log
+  terragrunt output -json -no-color --terragrunt-non-interactive --terragrunt-include-external-dependencies 2>&1 | tee /tmp/terragrunt-output
 else
   # Run apply all and display output both to terminal and the log file temp.log
   cd ${LOCATION}/${ENVIRONMENT}
 
-  terragrunt run-all apply -auto-approve -no-color --terragrunt-non-interactive --terragrunt-include-external-dependencies --terragrunt-debug 2>&1 | tee /tmp/terragrunt-apply.log
+  terragrunt run-all apply -auto-approve -no-color --terragrunt-non-interactive --terragrunt-include-external-dependencies 2>&1 | tee /tmp/terragrunt-apply.log
+  terragrunt run-all output -json -no-color --terragrunt-non-interactive --terragrunt-include-external-dependencies 2>&1 | tee /tmp/terragrunt-output
 fi
 
 log_path=/tmp/terragrunt

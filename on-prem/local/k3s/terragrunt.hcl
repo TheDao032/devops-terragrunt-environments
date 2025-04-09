@@ -50,8 +50,14 @@ dependency "vault-secrets" {
         gitops_repo = "values"
       }
 
-      "github/creds" = {
-        ssh_priv_key = "values"
+      "vault/approle/${local.environment}/creds" = {
+        client_token = "string",
+        role_id      = "string",
+        secret_id    = "string"
+      }
+
+      "vault/params" = {
+        clusterAddr = "string"
       }
     }
   }
@@ -66,7 +72,7 @@ inputs = {
   external_secrets_conf = {
     helm = {
       chart_version = "0.15.0"
-      namespace     = "security"
+      namespace     = "kube-system"
       repository    = "https://charts.external-secrets.io/"
       release_name  = "external-secrets"
     }
@@ -95,7 +101,7 @@ inputs = {
       rootpath        = "/"
       midl_prefix     = "/"
       ingroute_prefix = "/"
-      domain          = "argocd.k3s.local"
+      domain          = "argocd.k3s.${local.environment}"
     }
 
     secret = {
@@ -138,38 +144,64 @@ inputs = {
     }
   }
 
-  jenkins_conf = {
+  reloader_conf = {
     helm = {
-      chart_version = "5.7.3"
-      image_tag     = "2.479-jdk17"
-      namespace     = "gitops"
-      repository    = "https://charts.jenkins.io/"
-      release_name  = "jenkins"
+      chart_version = "2.0.0"
+      namespace     = "kube-system"
+      repository    = "https://stakater.github.io/stakater-charts"
+      release_name  = "reloader"
     }
 
     common = {
-      hostname    = "traefik.jenkins.local.com"
-      url         = "http://traefik.jenkins.local.com/"
+      rq_mem       = "128Mi"
+      rq_cpu       = "10m"
+      limits_mem   = "512Mi"
+      limits_cpu   = "100m"
+      storage_size = "10Gi"
+    }
+  }
+
+  jenkins_conf = {
+    helm = {
+      chart_version = "5.8.32"
+      # image_tag     = "2.504-jdk17"
+      namespace    = "default"
+      repository   = "https://charts.jenkins.io/"
+      release_name = "jenkins"
+    }
+
+    secrets = {
+      vault_role_id   = dependency.vault-secrets.outputs.secrets["vault/approle/jenkins_app/creds"]["role_id"]
+      vault_secret_id = dependency.vault-secrets.outputs.secrets["vault/approle/jenkins_app/creds"]["secret_id"]
+      vault_token     = dependency.vault-secrets.outputs.secrets["vault/approle/jenkins_app/creds"]["client_token"]
+      vault_url       = dependency.vault-secrets.outputs.secrets["vault/params"]["clusterAddr"]
+    }
+
+    common = {
+      tag         = "2.504-jdk21"
+      hostname    = "jenkins.k3s.${local.environment}"
+      url         = "http://jenkins.k3s.${local.environment}/"
       sc_name     = "jenkins-sc"
-      volume_size = "30Gi"
+      volume_size = "10Gi"
       username    = dependency.vault-secrets.outputs.secrets["jenkins/creds"]["username"]
       password    = dependency.vault-secrets.outputs.secrets["jenkins/creds"]["password"]
     }
 
     plugins = {
-      kubernetes                             = "4295.v7fa_01b_309c95"
-      workflow-aggregator                    = "600.vb_57cdd26fdd7"
-      git                                    = "5.5.2"
-      github                                 = "1.40.0"
-      configuration-as-code                  = "1850.va_a_8c31d3158b_"
-      blueocean-bitbucket-pipeline           = "1.27.16"
-      bitbucket-push-and-pull-request        = "3.1.1"
-      atlassian-bitbucket-server-integration = "4.1.0"
-      parameterized-scheduler                = "277.v61a_4b_a_49a_c5c"
-      github-checks                          = "589.v845136f916cd"
-      thinBackup                             = "2.1.1"
-      git-parameter                          = "0.9.19"
-      hashicorp-vault-plugin                 = "371.v884a_4dd60fb_6"
+      kubernetes              = "4324.vfec199a_33512"
+      workflow-aggregator     = "608.v67378e9d3db_1"
+      git                     = "5.7.0"
+      configuration-as-code   = "1932.v75cb_b_f1b_698d"
+      github                  = "1.43.0"
+      parameterized-scheduler = "285.ve611986d4c48"
+      github-checks           = "602.v264a_83610da_6"
+      thinBackup              = "2.1.1"
+      git-parameter           = "435.va_f85861c663a_"
+      hashicorp-vault-plugin  = "371.v884a_4dd60fb_6"
+      docker-build-publish    = "1.4.0"
+      # blueocean-bitbucket-pipeline           = "1.27.17"
+      # bitbucket-push-and-pull-request        = "3.2.0"
+      # atlassian-bitbucket-server-integration = "4.1.4"
     }
   }
 
@@ -298,12 +330,28 @@ inputs = {
       sc_name           = "vault-sc"
 
       external_vault_addr   = "vault-server:8200"
-      vault_server_url      = "https://192.168.56.11:8200"
-      vault_server_token    = get_env("VAULT_MASTER_TOKEN", "")
+      vault_server_url      = get_env("VAULT_ADDR", "")
+      vault_server_token    = get_env("VAULT_TOKEN", "")
       vault_tls_server_name = "vault-tls-server"
       vault_tls_ca_name     = "vault-tls-ca"
       host                  = "vault.k3s.local"
       rootpath              = "/"
     }
   }
+
+  # nginx_gateway_fabric_conf = {
+  #   helm = {
+  #     chart_version      = "1.6.2"
+  #     namespace          = "nginx-gateway"
+  #     repository    = "oci://ghcr.io/nginx/charts/nginx-gateway-fabric"
+  #     release_name  = "ngf"
+  #   }
+  #
+  #   image = {
+  #     tag = "nthedao.info"
+  #   }
+  # }
+  #
+  # traefik_gateway_api_conf = {
+  # }
 }
