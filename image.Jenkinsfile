@@ -1,14 +1,5 @@
 pipeline {
-  parameters {
-    choice(
-        name: 'terraform_module',
-        choices: ['', 'vault-secrets', 'jenkins', 'kafka', 'prometheus', 'consul', 'vault'],
-        description: 'Select one of the options'
-    )
-  }
-  agent {
-      docker { image 'node:22.14.0-alpine3.21' }
-  }
+  agent any
 
   environment {
     LOCATION = "on-prem" // Set LOCATION as 'on-prem'
