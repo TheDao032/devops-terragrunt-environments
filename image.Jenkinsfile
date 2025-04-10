@@ -13,8 +13,8 @@ pipeline {
                 jenkins-agent: docker
             spec:
               containers:
-              - name: terragrunt
-                image: docker:28.0.4-cli-alpine3.21
+              - name: docker
+                image: docker:28.0.4
                 tty: true
                 resources:
                   requests:
