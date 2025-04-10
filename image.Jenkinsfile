@@ -1,5 +1,10 @@
 pipeline {
-    agent any
+    agent {
+        docker {
+            image 'docker:28.0.4-cli-alpine3.21' // Docker CLI image
+            args '-v /var/run/docker.sock:/var/run/docker.sock' // Mount Docker socket
+        }
+    }
 
     environment {
       LOCATION = "on-prem" // Set LOCATION as 'on-prem'
