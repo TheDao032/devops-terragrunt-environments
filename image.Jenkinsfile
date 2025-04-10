@@ -1,9 +1,38 @@
 pipeline {
     agent {
-        docker {
-            image 'docker:28.0.4-cli-alpine3.21' // Docker CLI image
-            args '-v /var/run/docker.sock:/var/run/docker.sock' // Mount Docker socket
+        // docker {
+        //     image 'docker:28.0.4-cli-alpine3.21' // Docker CLI image
+        //     args '-v /var/run/docker.sock:/var/run/docker.sock' // Mount Docker socket
+        // }
+        kubernetes {
+            yaml """
+            apiVersion: v1
+            kind: Pod
+            metadata:
+              labels:
+                jenkins-agent: docker
+            spec:
+              containers:
+              - name: terragrunt
+                image: docker:28.0.4-cli-alpine3.21
+                tty: true
+                resources:
+                  requests:
+                    memory: "512Mi"
+                    cpu: "500m"
+                  limits:
+                    memory: "1Gi"
+                    cpu: "1"
+                volumeMounts:
+                - name: docker-sock
+                  mountPath: /var/run/docker.sock
+              volumes:
+              - name: docker-sock
+                hostPath:
+                  path: /var/run/docker.sock
+            """
         }
+
     }
 
     environment {
