@@ -18,7 +18,7 @@ pipeline {
         stage('Build and Push Docker Image') {
             steps {
                 script {
-                    docker.withRegistry("${REGISTRY}", 'dockerhub-credentials') {
+                    docker.withRegistry("${REGISTRY}", 'dockerhub-creds') {
                         def customImage = docker.build("${IMAGE}:${TAG}")
                         customImage.push()
                         customImage.push('latest')

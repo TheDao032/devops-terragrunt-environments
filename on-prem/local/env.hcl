@@ -14,6 +14,9 @@ locals {
   backend_gitops_url   = local.backend_vars.locals.gitops_url
   backend_ssh_priv_key = local.backend_vars.locals.ssh_private_key
 
+  backend_github_token    = local.backend_vars.locals.github_token
+  backend_github_username = local.backend_vars.locals.github_username
+
   backend_artifactory_registry = local.backend_vars.locals.artifactory_registry
 
   environment        = "local"
@@ -44,6 +47,8 @@ locals {
 
     "github/creds" = {
       ssh_priv_key = local.backend_ssh_priv_key
+      username     = local.backend_github_username
+      token        = local.backend_github_token
     }
 
     # Only for k3d local kubernetes cluster

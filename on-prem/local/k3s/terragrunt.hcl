@@ -50,6 +50,10 @@ dependency "vault-secrets" {
         gitops_repo = "values"
       }
 
+      "github/creds" = {
+        token = "string"
+      }
+
       "vault/approle/${local.environment}/creds" = {
         client_token = "string",
         role_id      = "string",
@@ -182,6 +186,8 @@ inputs = {
       vault_token     = dependency.vault-secrets.outputs.secrets["vault/approle/jenkins_app/creds"]["client_token"]
       vault_url       = dependency.vault-secrets.outputs.secrets["vault/params"]["clusterAddr"]
       docker_token    = dependency.vault-secrets.outputs.secrets["docker/creds"]["password"]
+      github_token    = dependency.vault-secrets.outputs.secrets["github/creds"]["token"]
+      github_username = dependency.vault-secrets.outputs.secrets["github/creds"]["username"]
     }
 
     common = {
@@ -206,6 +212,7 @@ inputs = {
       git-parameter           = "435.va_f85861c663a_"
       hashicorp-vault-plugin  = "371.v884a_4dd60fb_6"
       docker-build-publish    = "1.4.0"
+      docker-workflow         = "611.v16e84da_6d3ff"
       # blueocean-bitbucket-pipeline           = "1.27.17"
       # bitbucket-push-and-pull-request        = "3.2.0"
       # atlassian-bitbucket-server-integration = "4.1.4"
