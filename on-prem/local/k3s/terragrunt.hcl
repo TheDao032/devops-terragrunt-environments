@@ -186,6 +186,7 @@ inputs = {
       vault_token     = dependency.vault-secrets.outputs.secrets["vault/approle/jenkins_app/creds"]["client_token"]
       vault_url       = dependency.vault-secrets.outputs.secrets["vault/params"]["clusterAddr"]
       docker_token    = dependency.vault-secrets.outputs.secrets["docker/creds"]["password"]
+      docker_username = dependency.vault-secrets.outputs.secrets["docker/creds"]["username"]
       github_token    = dependency.vault-secrets.outputs.secrets["github/creds"]["token"]
       github_username = dependency.vault-secrets.outputs.secrets["github/creds"]["username"]
     }

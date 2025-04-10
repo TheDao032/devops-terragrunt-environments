@@ -19,7 +19,8 @@ pipeline {
             steps {
                 script {
                     docker.withRegistry("${REGISTRY}", 'dockerhub-creds') {
-                        def customImage = docker.build("${IMAGE}:${TAG}")
+                        def dockerfile = 'Dockerfile'
+                        def customImage = docker.build("${IMAGE}:${TAG}", "-f ${dockerfile} ./")
                         customImage.push()
                         customImage.push('latest')
                     }
