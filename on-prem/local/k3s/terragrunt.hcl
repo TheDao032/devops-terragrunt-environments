@@ -59,6 +59,12 @@ dependency "vault-secrets" {
       "vault/params" = {
         clusterAddr = "string"
       }
+
+      "docker/creds" = {
+        username = "string",
+        password = "string",
+        email    = "string"
+      }
     }
   }
   mock_outputs_merge_strategy_with_state = "shallow"
@@ -175,6 +181,7 @@ inputs = {
       vault_secret_id = dependency.vault-secrets.outputs.secrets["vault/approle/jenkins_app/creds"]["secret_id"]
       vault_token     = dependency.vault-secrets.outputs.secrets["vault/approle/jenkins_app/creds"]["client_token"]
       vault_url       = dependency.vault-secrets.outputs.secrets["vault/params"]["clusterAddr"]
+      docker_token    = dependency.vault-secrets.outputs.secrets["docker/creds"]["password"]
     }
 
     common = {
