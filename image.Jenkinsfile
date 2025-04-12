@@ -102,9 +102,12 @@ pipeline {
                 spec:
                   containers:
                   - name: docker
-                    image: docker:28.1.0-rc.1-cli-alpine3.21
+                    image: docker:28.1.0-rc.1-dind
                     command:
-                      - cat
+                      - dockerd-entrypoint.sh
+                    args:
+                      - --host=unix:///var/run/docker.sock
+                      - --storage-driver=vfs
                     tty: true
                     securityContext:
                       privileged: true
