@@ -107,17 +107,22 @@ pipeline {
                       - dockerd-entrypoint.sh
                     args:
                       - --host=unix:///var/run/docker.sock
-                      - --iptables=false
-                      - --ip-masq=false
                     tty: true
                     securityContext:
                       privileged: true
                     volumeMounts:
                       - name: dind-storage
                         mountPath: /var/lib/docker
+                    volumeMounts:
+                      - name: proc-storage
+                        mountPath: /proc/net/ip6_tables_names
                   volumes:
                     - name: dind-storage
                       emptyDir: {}
+                  volumes:
+                    - name: proc-storage
+                      hostPath:
+                        path: /proc/net/ip6_tables_names
             """
         }
     }
