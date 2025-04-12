@@ -102,7 +102,7 @@ pipeline {
                 spec:
                   containers:
                   - name: docker
-                    image: docker:28.1.0-rc.1-cli-alpine3.21
+                    image: docker:28.1.0-rc.1-dind
                     tty: true
                     command:
                       - dockerd-entrypoint.sh
