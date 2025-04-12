@@ -104,10 +104,6 @@ pipeline {
                   - name: docker
                     image: docker:28.1.0-rc.1-cli-alpine3.21
                     tty: true
-                    command:
-                      - dockerd-entrypoint.sh
-                    args:
-                      - --host=unix:///var/run/docker.sock
                     securityContext:
                       privileged: true
                     volumeMounts:
