@@ -115,7 +115,6 @@ pipeline {
                   - name: docker-sock
                     hostPath:
                       path: /var/run/docker.sock
-                      type: Socket
             """
         }
     }
