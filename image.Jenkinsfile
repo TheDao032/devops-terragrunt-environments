@@ -102,7 +102,7 @@ pipeline {
                 spec:
                   containers:
                   - name: docker
-                    image: docker:28.0.4
+                    image: docker:28.0.4-dind
                     tty: true
                     command:
                       - cat
