@@ -102,12 +102,10 @@ pipeline {
                 spec:
                   containers:
                   - name: docker
-                    image: docker:28.1.0-rc.1-dind
-                    tty: true
+                    image: docker:28.1.0-rc.1-cli-alpine3.21
                     command:
-                      - dockerd-entrypoint.sh
-                    args:
-                      - --host=unix:///var/run/docker.sock
+                      - cat
+                    tty: true
                     securityContext:
                       privileged: true
                     volumeMounts:
