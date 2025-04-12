@@ -119,7 +119,6 @@ pipeline {
                   volumes:
                     - name: dind-storage
                       emptyDir: {}
-                  volumes:
                     - name: proc-storage
                       hostPath:
                         path: /proc/net/ip6_tables_names
