@@ -15,6 +15,8 @@ pipeline {
                       - dockerd-entrypoint.sh
                     args:
                       - --host=unix:///var/run/docker.sock
+                      - --iptables=false
+                      - --ip-masq=false
                     tty: true
                     securityContext:
                       privileged: true
@@ -22,8 +24,18 @@ pipeline {
                       - name: dind-storage
                         mountPath: /var/lib/docker
                   volumes:
-                    - name: dind-storage
-                      emptyDir: {}
+                    - name: docker-storage
+                      persistentVolumeClaim:
+                        claimName: docker-storage-claim
+                  volumeClaimTemplates:
+                  - metadata:
+                      name: docker-storage-claim
+                    spec:
+                      accessModes: ["ReadWriteOnce"]
+                      storageClassName: "jenkins-sc"   # use your cluster’s default class
+                      resources:
+                        requests:
+                          storage: 5Gi
             """
         }
     }
