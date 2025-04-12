@@ -93,8 +93,6 @@
 pipeline {
     agent {
         kubernetes {
-            label 'docker-agent'
-            defaultContainer 'jnlp' // the Jenkins inbound agent container
             yaml """
                 apiVersion: v1
                 kind: Pod
@@ -108,8 +106,6 @@ pipeline {
                     tty: true
                     command:
                       - dockerd-entrypoint.sh
-                    args:
-                      - --host=unix:///var/run/docker.sock
                     securityContext:
                       privileged: true
                     volumeMounts:
