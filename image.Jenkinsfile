@@ -102,17 +102,19 @@ pipeline {
                 spec:
                   containers:
                   - name: docker
-                    image: docker:28.0.4
+                    image: docker:28.0.4-cli
                     tty: true
+                    command:
+                      - cat
                     securityContext:
                       privileged: true
                     volumeMounts:
                     - name: docker-sock
-                      mountPath: /var/run
+                      mountPath: /var/run/docker.sock
                   volumes:
                   - name: docker-sock
                     hostPath:
-                      path: /var/run
+                      path: /var/run/docker.sock
             """
         }
     }
