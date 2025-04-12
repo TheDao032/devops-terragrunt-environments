@@ -106,6 +106,8 @@ pipeline {
                     tty: true
                     command:
                       - dockerd-entrypoint.sh
+                    args:
+                      - --host=unix:///var/run/docker.sock
                     securityContext:
                       privileged: true
                     volumeMounts:
@@ -115,6 +117,7 @@ pipeline {
                   - name: docker-sock
                     hostPath:
                       path: /var/run/docker.sock
+                      type: Socket
             """
         }
     }
