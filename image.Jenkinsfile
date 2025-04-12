@@ -21,7 +21,7 @@ pipeline {
                     securityContext:
                       privileged: true
                     volumeMounts:
-                      - name: dind-storage
+                      - name: docker-storage
                         mountPath: /var/lib/docker
                   volumes:
                     - name: docker-storage
