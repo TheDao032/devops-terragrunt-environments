@@ -104,24 +104,21 @@ pipeline {
                   - name: docker
                     image: docker:28.1.0-rc.1-dind
                     command:
-                      - dockerd-entrypoint.sh
-                    args:
-                      - --host=unix:///var/run/docker.sock
+                      - sh
+                      - -c
+                      # Start dockerd and suppress those two cat errors
+                      - |
+                        dockerd-entrypoint.sh --host=unix:///var/run/docker.sock --iptables=false --ip-masq=false \
+                          2> >(grep -vE 'ip6_tables_names|arp_tables_names' >&2)
                     tty: true
                     securityContext:
                       privileged: true
                     volumeMounts:
                       - name: dind-storage
                         mountPath: /var/lib/docker
-                    volumeMounts:
-                      - name: proc-storage
-                        mountPath: /proc/net/ip6_tables_names
                   volumes:
                     - name: dind-storage
                       emptyDir: {}
-                    - name: proc-storage
-                      hostPath:
-                        path: /proc/net/ip6_tables_names
             """
         }
     }
