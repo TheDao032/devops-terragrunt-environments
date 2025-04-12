@@ -107,6 +107,8 @@ pipeline {
                       - dockerd-entrypoint.sh
                     args:
                       - --host=unix:///var/run/docker.sock
+                      - --iptables=false
+                      - --ip-masq=false
                     tty: true
                     securityContext:
                       privileged: true
