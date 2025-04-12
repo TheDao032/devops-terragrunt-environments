@@ -94,33 +94,26 @@ pipeline {
     agent {
         kubernetes {
             yaml """
-apiVersion: v1
-kind: Pod
-metadata:
-  labels:
-    jenkins-agent: docker
-spec:
-  containers:
-  - name: docker
-    image: docker:28.0.4
-    tty: true
-    securityContext:
-      privileged: true
-    resources:
-      requests:
-        memory: "512Mi"
-        cpu: "500m"
-      limits:
-        memory: "1Gi"
-        cpu: "1"
-    volumeMounts:
-    - name: docker-sock
-      mountPath: /var/run/docker.sock
-  volumes:
-  - name: docker-sock
-    hostPath:
-      path: /var/run/docker.sock
-"""
+                apiVersion: v1
+                kind: Pod
+                metadata:
+                  labels:
+                    jenkins-agent: docker
+                spec:
+                  containers:
+                  - name: docker
+                    image: docker:28.0.4
+                    tty: true
+                    securityContext:
+                      privileged: true
+                    volumeMounts:
+                    - name: docker-sock
+                      mountPath: /var/run
+                  volumes:
+                  - name: docker-sock
+                    hostPath:
+                      path: /var/run
+            """
         }
     }
 
