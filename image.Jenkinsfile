@@ -52,11 +52,19 @@ pipeline {
         stage('Build and Push Docker Image') {
             steps {
                 script {
-                    docker.withRegistry("${REGISTRY}", 'dockerhub-creds') {
-                        def dockerfile = 'Dockerfile'
-                        def customImage = docker.build("${IMAGE}:${TAG}", "-f ${dockerfile} ./")
-                        customImage.push()
-                        customImage.push('latest')
+                    // docker.withRegistry("${REGISTRY}", 'dockerhub-creds') {
+                    //     def dockerfile = 'Dockerfile'
+                    //     def customImage = docker.build("${IMAGE}:${TAG}", "-f ${dockerfile} ./")
+                    //     customImage.push()
+                    //     customImage.push('latest')
+                    // }
+                    withCredentials([usernamePassword(credentialsId: 'dockerhub-creds', usernameVariable: 'DOCKERHUB_USERNAME', passwordVariable: 'DOCKERHUB_PASSWORD')]) {
+                        sh """
+                            echo "$DOCKERHUB_PASSWORD" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin $REGISTRY
+                            docker build -t $IMAGE:$TAG .
+                            docker push $IMAGE:$TAG
+                            docker push $IMAGE:latest
+                        """
                     }
                 }
             }
