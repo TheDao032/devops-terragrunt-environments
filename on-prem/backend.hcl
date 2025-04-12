@@ -13,8 +13,8 @@ locals {
   github_token    = get_env("GITHUB_TOKEN", "")
   github_username = get_env("GITHUB_USERNAME", "TheDao032")
 
-  gitops_url           = "git@github.com:${local.github_username}"
-  ssh_private_key      = get_env("SSH_PRIVATE_KEY", "")
+  gitops_url      = "git@github.com:${local.github_username}"
+  ssh_private_key = get_env("SSH_PRIVATE_KEY", "")
 
   artifactory_registry = get_env("ARTIFACTORY_REGISTRY", "nthedao")
 }
