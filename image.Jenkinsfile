@@ -141,8 +141,6 @@ pipeline {
                                                             passwordVariable: 'DOCKERHUB_PASSWORD')]) {
                             // Using --password-stdin is a best practice so the password does not appear on the command line.
                             sh """
-                                dockerd-entrypoint.sh &
-                                sleep 5
                                 echo "\$DOCKERHUB_PASSWORD" | docker login -u "\$DOCKERHUB_USERNAME" --password-stdin \$REGISTRY
                                 docker build -t \$IMAGE:\$TAG -f Dockerfile .
                                 docker push \$IMAGE:\$TAG
@@ -156,3 +154,21 @@ pipeline {
         }
     }
 }
+
+// def loadSecrets (Closure body, List<String> credentialIds) {
+//     def credentialList = []
+//     credentialIds.each {
+//         credId -> credentialList.add(file(credentialsId: credId, variable: "${credId.toUpperCase()}_FILE"))
+//     }
+//
+//     withCredentials(credentialList) {
+//         // Load environment variables from secret files
+//         sh """
+//         set -a
+//         ${credentialIds.collect { "source \$${it.toUpperCase()}_FILE" }.join('\n')}
+//         set +a
+//         """
+//         // Run the provided body of steps (passed in closure)
+//         body()
+//     }
+// }
