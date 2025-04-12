@@ -104,17 +104,10 @@ pipeline {
                   - name: docker
                     image: docker:28.1.0-rc.1-dind
                     command:
-                      - cat
+                      - dockerd-entrypoint.sh
                     tty: true
                     securityContext:
                       privileged: true
-                    volumeMounts:
-                    - name: docker-sock
-                      mountPath: /var/run/docker.sock
-                  volumes:
-                  - name: docker-sock
-                    hostPath:
-                      path: /var/run/docker.sock
             """
         }
     }
