@@ -113,7 +113,6 @@ pipeline {
                   - name: docker-sock
                     hostPath:
                       path: /var/run/docker.sock
-                      type: Socket
             """
         }
     }
@@ -129,18 +128,20 @@ pipeline {
     stages {
         stage('Build and Push Docker Image') {
             steps {
-                script {
-                    withCredentials([usernamePassword(credentialsId: 'dockerhub-creds',
-                                                        usernameVariable: 'DOCKERHUB_USERNAME',
-                                                        passwordVariable: 'DOCKERHUB_PASSWORD')]) {
-                        // Using --password-stdin is a best practice so the password does not appear on the command line.
-                        sh """
-                            echo "\$DOCKERHUB_PASSWORD" | docker login -u "\$DOCKERHUB_USERNAME" --password-stdin \$REGISTRY
-                            docker build -t \$IMAGE:\$TAG -f Dockerfile .
-                            docker push \$IMAGE:\$TAG
-                            docker tag \$IMAGE:\$TAG \$IMAGE:latest
-                            docker push \$IMAGE:latest
-                        """
+                container('docker') {
+                    script {
+                        withCredentials([usernamePassword(credentialsId: 'dockerhub-creds',
+                                                            usernameVariable: 'DOCKERHUB_USERNAME',
+                                                            passwordVariable: 'DOCKERHUB_PASSWORD')]) {
+                            // Using --password-stdin is a best practice so the password does not appear on the command line.
+                            sh """
+                                echo "\$DOCKERHUB_PASSWORD" | docker login -u "\$DOCKERHUB_USERNAME" --password-stdin \$REGISTRY
+                                docker build -t \$IMAGE:\$TAG -f Dockerfile .
+                                docker push \$IMAGE:\$TAG
+                                docker tag \$IMAGE:\$TAG \$IMAGE:latest
+                                docker push \$IMAGE:latest
+                            """
+                        }
                     }
                 }
             }
