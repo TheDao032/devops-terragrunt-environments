@@ -104,10 +104,7 @@ pipeline {
                   - name: docker
                     image: docker:28.1.0-rc.1-dind
                     command:
-                      - dockerd-entrypoint.sh
-                    args:
-                      - --host=unix:///var/run/docker.sock
-                      - --storage-driver=vfs
+                      - cat
                     tty: true
                     securityContext:
                       privileged: true
@@ -140,6 +137,8 @@ pipeline {
                                                             passwordVariable: 'DOCKERHUB_PASSWORD')]) {
                             // Using --password-stdin is a best practice so the password does not appear on the command line.
                             sh """
+                                dockerd-entrypoint.sh &
+                                sleep 5
                                 echo "\$DOCKERHUB_PASSWORD" | docker login -u "\$DOCKERHUB_USERNAME" --password-stdin \$REGISTRY
                                 docker build -t \$IMAGE:\$TAG -f Dockerfile .
                                 docker push \$IMAGE:\$TAG
