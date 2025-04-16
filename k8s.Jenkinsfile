@@ -8,19 +8,16 @@ pipeline {
   }
   agent {
     kubernetes {
-      inheritFrom 'infra'
+      inheritFrom "infra"
     }
   }
 
   environment {
-    LOCATION = 'on-prem' // Set LOCATION as 'on-prem'
+    LOCATION = "on-prem" // Set LOCATION as 'on-prem'
     ENVIRONMENT = "${env.GIT_BRANCH}" // Dynamically get the Git branch
     CREDENTIAL_IDS = ["k3s-env", "agile-app-env", "agile-db-env",
                       "agile-db-env", "hikari-conn-env", "ldap-env",
                       "pod-restart-collector-env", "query-env", "vault-env"]
-    // VAULT_ADDR = credentials('vault-cluster-addr')
-    // VAULT_TOKEN = credentials('vault-token')
-    // HELM_REPO_URL = "https://github.com/TheDao032/devops-helm"
   }
   stages {
     stage('Setup kubernetes config') {
