@@ -1,34 +1,5 @@
 pipeline {
     agent {
-        // kubernetes {
-        //     yaml """
-        //         apiVersion: v1
-        //         kind: Pod
-        //         metadata:
-        //           labels:
-        //             jenkins-agent: docker
-        //         spec:
-        //           containers:
-        //           - name: docker
-        //             image: docker:28.1.0-rc.1-dind
-        //             command:
-        //               - dockerd-entrypoint.sh
-        //             args:
-        //               - --host=unix:///var/run/docker.sock
-        //               - --iptables=false
-        //               - --ip-masq=false
-        //             tty: true
-        //             securityContext:
-        //               privileged: true
-        //             volumeMounts:
-        //               - name: dind-storage
-        //                 mountPath: /var/lib/docker
-        //           volumes:
-        //             - name: dind-storage
-        //               persistentVolumeClaim:
-        //                 claimName: jenkins-pipeline-pvc
-        //     """
-        // }
         kubernetes {
           inheritFrom 'docker'
         }

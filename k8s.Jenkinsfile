@@ -2,40 +2,13 @@ pipeline {
   parameters {
     choice(
         name: 'terraform_module',
-        choices: ['', 'vault-secrets', 'jenkins', 'kafka', 'prometheus', 'consul', 'vault'],
+        choices: ['', 'vault-secrets', 'vault-roles', 'k3s', 'external-secrets', 'apps'],
         description: 'Select one of the options'
     )
   }
   agent {
     kubernetes {
-        yaml """
-        apiVersion: v1
-        kind: Pod
-        metadata:
-          labels:
-            jenkins-agent: terragrunt
-        spec:
-          containers:
-          - name: terragrunt
-            image: alpine/terragrunt:latest
-            command:
-            - cat
-            tty: true
-            resources:
-              requests:
-                memory: "512Mi"
-                cpu: "500m"
-              limits:
-                memory: "1Gi"
-                cpu: "1"
-            volumeMounts:
-            - name: docker-sock
-              mountPath: /var/run/docker.sock
-          volumes:
-          - name: docker-sock
-            hostPath:
-              path: /var/run/docker.sock
-        """
+      inheritFrom 'infra'
     }
   }
 
@@ -102,6 +75,7 @@ pipeline {
             }
         }
     }
+
     stage('Terragrunt deploy') {
         steps {
             input(message: 'Proceed with Terragrunt apply?') // Optional for manual approval
@@ -116,6 +90,7 @@ pipeline {
             }
         }
     }
+
     // stage('Checkout Helm-Chart') {
     //     steps {
     //         script {
