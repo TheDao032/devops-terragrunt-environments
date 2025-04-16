@@ -29,7 +29,7 @@ pipeline {
         //                 claimName: jenkins-pipeline-pvc
         //     """
         // }
-        label 'docker-agent'
+        label 'docker'
     }
 
     environment {
