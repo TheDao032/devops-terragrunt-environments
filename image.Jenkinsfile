@@ -29,7 +29,10 @@ pipeline {
         //                 claimName: jenkins-pipeline-pvc
         //     """
         // }
-        label 'docker'
+        kubernetes {
+          label 'docker'
+          inheritFrom 'docker'
+        }
     }
 
     environment {
