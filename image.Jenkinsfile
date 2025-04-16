@@ -30,7 +30,6 @@ pipeline {
         //     """
         // }
         kubernetes {
-          label 'docker'
           inheritFrom 'docker'
         }
     }
