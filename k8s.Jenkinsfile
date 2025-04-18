@@ -1,3 +1,9 @@
+def CREDENTIAL_IDS = [
+  "k3s-env", "agile-app-env", "agile-db-env",
+  "agile-db-env", "hikari-conn-env", "ldap-env",
+  "pod-restart-collector-env", "query-env", "vault-env"
+]
+
 pipeline {
   parameters {
     choice(
@@ -6,6 +12,7 @@ pipeline {
         description: 'Select one of the options'
     )
   }
+
   agent {
     kubernetes {
       inheritFrom "infra"
@@ -15,9 +22,6 @@ pipeline {
   environment {
     LOCATION = "on-prem" // Set LOCATION as 'on-prem'
     ENVIRONMENT = "${env.GIT_BRANCH}" // Dynamically get the Git branch
-    CREDENTIAL_IDS = ["k3s-env", "agile-app-env", "agile-db-env",
-                      "agile-db-env", "hikari-conn-env", "ldap-env",
-                      "pod-restart-collector-env", "query-env", "vault-env"]
   }
   stages {
     stage('Setup kubernetes config') {
