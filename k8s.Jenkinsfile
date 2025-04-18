@@ -43,7 +43,7 @@ pipeline {
                     ],
                     vaultCredentialId: 'vault-jenkins-token'
                 ]) {
-                    container('terragrunt') {
+                    container('infra') {
                         script {
                             // Configure kubectl to use host and certificates
                             sh """
