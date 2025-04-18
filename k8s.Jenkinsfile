@@ -30,7 +30,7 @@ pipeline {
                 withVault([
                     vaultSecrets: [
                         [
-                            path: "${ENVIRONMENT}/data/k3s/creds",
+                            path: "${ENVIRONMENT}/k3s/creds",
                             engineVersion: 2,
                             secretValues: [
                                 [envVar: 'KUBE_HOST', vaultKey: 'host'],
