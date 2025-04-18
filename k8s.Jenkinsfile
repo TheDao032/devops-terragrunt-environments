@@ -65,8 +65,8 @@ pipeline {
 
     stage('Terragrunt build') {
         steps {
-            container('infra') {
-                script {
+            script {
+                container('infra') {
                     sh """
                     if [[ -n "${TERRAFORM_MODULE}" ]]; then
                       deployments/${LOCATION}/build.sh ${ENVIRONMENT} ${params.terraform_module}
@@ -81,9 +81,9 @@ pipeline {
 
     stage('Terragrunt deploy') {
         steps {
-            container('infra') {
-                input(message: 'Proceed with Terragrunt apply?') // Optional for manual approval
-                script {
+            input(message: 'Proceed with Terragrunt apply?') // Optional for manual approval
+            script {
+                container('infra') {
                     sh """
                     if [[ -n "${TERRAFORM_MODULE}" ]]; then
                       deployments/${LOCATION}/deploy.sh ${ENVIRONMENT} ${params.terraform_module}
