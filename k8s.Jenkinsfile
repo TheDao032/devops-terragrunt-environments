@@ -65,29 +65,33 @@ pipeline {
 
     stage('Terragrunt build') {
         steps {
-            script {
-                sh """
-                if [[ -n "${TERRAFORM_MODULE}" ]]; then
-                  deployments/${LOCATION}/build.sh ${ENVIRONMENT} ${params.terraform_module}
-                else
-                  deployments/${LOCATION}/build.sh ${ENVIRONMENT}
-                fi
-                """
+            container('infra') {
+                script {
+                    sh """
+                    if [[ -n "${TERRAFORM_MODULE}" ]]; then
+                      deployments/${LOCATION}/build.sh ${ENVIRONMENT} ${params.terraform_module}
+                    else
+                      deployments/${LOCATION}/build.sh ${ENVIRONMENT}
+                    fi
+                    """
+                }
             }
         }
     }
 
     stage('Terragrunt deploy') {
         steps {
-            input(message: 'Proceed with Terragrunt apply?') // Optional for manual approval
-            script {
-                sh """
-                if [[ -n "${TERRAFORM_MODULE}" ]]; then
-                  deployments/${LOCATION}/deploy.sh ${ENVIRONMENT} ${params.terraform_module}
-                else
-                  deployments/${LOCATION}/deploy.sh ${ENVIRONMENT}
-                fi
-                """
+            container('infra') {
+                input(message: 'Proceed with Terragrunt apply?') // Optional for manual approval
+                script {
+                    sh """
+                    if [[ -n "${TERRAFORM_MODULE}" ]]; then
+                      deployments/${LOCATION}/deploy.sh ${ENVIRONMENT} ${params.terraform_module}
+                    else
+                      deployments/${LOCATION}/deploy.sh ${ENVIRONMENT}
+                    fi
+                    """
+                }
             }
         }
     }
