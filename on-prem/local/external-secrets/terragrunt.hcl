@@ -16,8 +16,8 @@ locals {
 }
 
 terraform {
-  source = "../../../../terraform-modules//on-prem/external-secrets"
-  # source = "git::git@github.com:TheDao032/demo-terraform-modules.git//amazon-web-service/eks?ref=${local.environment}"
+  # source = "../../../../terraform-modules//on-prem/external-secrets"
+  source = "git::git@github.com:TheDao032/demo-terraform-modules.git//on-prem/external-secrets?ref=${local.environment}"
 }
 
 # dependency "vault-secrets" {
