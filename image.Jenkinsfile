@@ -26,8 +26,12 @@ pipeline {
                                 echo "\$DOCKERHUB_PASSWORD" | docker login -u "\$DOCKERHUB_USERNAME" --password-stdin \$REGISTRY
                                 docker build -t \$IMAGE:\$TAG -f Dockerfile .
                                 docker push \$IMAGE:\$TAG
+
                                 docker tag \$IMAGE:\$TAG \$IMAGE:latest
                                 docker push \$IMAGE:latest
+
+                                docker tag \$IMAGE:\$TAG \$IMAGE:\$ENVIRONMENT
+                                docker push \$IMAGE:\$ENVIRONMENT
                             """
                         }
                     }
