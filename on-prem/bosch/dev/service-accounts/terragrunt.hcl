@@ -1,0 +1,16 @@
+locals {
+  environment_vars = read_terragrunt_config(find_in_parent_folders("env.hcl"))
+  environment      = local.environment_vars.locals.environment
+}
+
+terraform {
+  source = "../../../../../devops-terraform-modules//on-prem/service-accounts"
+}
+
+include {
+  path = find_in_parent_folders()
+}
+
+inputs = {
+  # Overrides variables from env.hcl
+}

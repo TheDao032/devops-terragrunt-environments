@@ -1,0 +1,60 @@
+pipeline {
+    agent {
+        kubernetes {
+          inheritFrom 'docker'
+        }
+    }
+
+    environment {
+        LOCATION    = "on-prem"                  // Set LOCATION as 'on-prem'
+        ENVIRONMENT = "${env.GIT_BRANCH}"          // Dynamically get the Git branch
+        REGISTRY    = "https://index.docker.io/v1/"
+        IMAGE       = "nthedao/infra-v1"
+        TAG         = "${env.GIT_COMMIT}"
+    }
+
+    stages {
+        stage('Build and Push Docker Image') {
+            steps {
+                container('docker') {
+                    script {
+                        withCredentials([usernamePassword(credentialsId: 'dockerhub-creds',
+                                                            usernameVariable: 'DOCKERHUB_USERNAME',
+                                                            passwordVariable: 'DOCKERHUB_PASSWORD')]) {
+                            // Using --password-stdin is a best practice so the password does not appear on the command line.
+                            sh """
+                                echo "\$DOCKERHUB_PASSWORD" | docker login -u "\$DOCKERHUB_USERNAME" --password-stdin \$REGISTRY
+                                docker build -t \$IMAGE:\$TAG -f Dockerfile .
+                                docker push \$IMAGE:\$TAG
+
+                                docker tag \$IMAGE:\$TAG \$IMAGE:latest
+                                docker push \$IMAGE:latest
+
+                                docker tag \$IMAGE:\$TAG \$IMAGE:\$ENVIRONMENT
+                                docker push \$IMAGE:\$ENVIRONMENT
+                            """
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// def loadSecrets (Closure body, List<String> credentialIds) {
+//     def credentialList = []
+//     credentialIds.each {
+//         credId -> credentialList.add(file(credentialsId: credId, variable: "${credId.toUpperCase()}_FILE"))
+//     }
+//
+//     withCredentials(credentialList) {
+//         // Load environment variables from secret files
+//         sh """
+//         set -a
+//         ${credentialIds.collect { "source \$${it.toUpperCase()}_FILE" }.join('\n')}
+//         set +a
+//         """
+//         // Run the provided body of steps (passed in closure)
+//         body()
+//     }
+// }
