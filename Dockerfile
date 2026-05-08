@@ -1,7 +1,7 @@
 FROM ubuntu:latest
 
-ENV TERRAFORM_VERSION=1.11.3
-ENV TERRAGRUNT_VERSION=0.77.7
+ENV TERRAFORM_VERSION=1.15.2
+ENV TERRAGRUNT_VERSION=1.0.4
 
 RUN apt update -y && apt install -y unzip wget curl python3 python3-pip apt-transport-https ca-certificates gnupg git openssh-client
 
