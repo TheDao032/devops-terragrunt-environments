@@ -4,8 +4,8 @@ locals {
 }
 
 terraform {
-  # source = "../../../../../devops-terraform-modules//on-prem/bosch/vault-secrets"
-  source = "git::git@github.com:TheDao032/devops-terraform-modules.git//on-prem/bosch/vault-secrets?ref=${local.environment}"
+  # source = "../../../../../devops-terraform-modules//on-prem/vault-secrets"
+  source = "../../../../../devops-terraform-modules//on-prem/vault-secrets"
 }
 
 dependency "vault-roles" {

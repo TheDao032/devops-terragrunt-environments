@@ -1,167 +1,181 @@
 # Terragrunt environments
 
-Infrastructure-as-code orchestration with Terragrunt + Terraform across
-multiple **locations**, **tenants**, and **environments**.
+Per-(location, tenant, env) Terragrunt wiring. Consumes generic modules
+from sibling repo
+[`devops-terraform-modules`](../devops-terraform-modules/).
 
 ## Repository layout
 
 ```
-<LOCATION>/<TENANT>/<ENVIRONMENT>/<RESOURCE>/terragrunt.hcl    ← on-prem (per-tenant)
-<CLOUD>/<ACCOUNT-OR-REGION>/<ENVIRONMENT>/<RESOURCE>/...        ← public clouds
-deployments/<LOCATION>/{build,deploy,destroy}.sh                ← orchestration wrappers
-deployments/<LOCATION>/<TENANT>/envs/<ENVIRONMENT>/*.bash       ← runtime env-vars per (tenant, env)
+.
+├── terragrunt.onprems.hcl       ← root template variant: kube/helm/vault providers
+├── terragrunt.aws.hcl           ← root template variant: AWS provider + S3 backend
+├── terragrunt.azure.hcl         ← root template variant: kube/helm/vault (cloud-as-platform)
+├── terragrunt.gcp.hcl           ← root template variant: identical to azure
+├── plm.Jenkinsfile              ← canonical on-prem CI: tenant + module choice; loadSecrets
+├── k8s.Jenkinsfile              ← legacy variant
+├── image.Jenkinsfile            ← runner Docker image
+├── Dockerfile                   ← terraform + terragrunt + kubectl + helm runner
+│
+├── on-prem/
+│   ├── location.hcl             ← `location = "on-prem"`
+│   ├── bosch/                   ← per-tenant tree (see below)
+│   └── renesas/                 ← per-tenant tree
+│
+├── aws/                         ← per-cloud env-tree (account/region/env)
+├── azure/                       ← (mostly scaffolding)
+├── gcp/                         ← (mostly scaffolding)
+│
+└── deployments/
+    ├── on-prem/{build,deploy,destroy}.sh
+    ├── on-prem/<tenant>/envs/<env>/*.bash[.example]
+    ├── cloud/{build,deploy,destroy}.sh
+    └── utils/{utils,envs,cloudflare}.sh
 ```
 
-The on-prem path is **tenant-segmented** because each tenant (bosch, renesas)
-runs on its own k3s cluster, has its own Vault, its own Terraform Cloud
-workspace, and its own deploy-time secrets. The cloud paths are **not**
-tenant-segmented because the cloud account is itself the tenant boundary.
-
-### On-prem layout in detail
+## Per-tenant on-prem layout
 
 ```
-on-prem/
-├── location.hcl                    ← shared across tenants ("on-prem")
-├── bosch/
-│   ├── backend.hcl                 ← per-tenant Terraform Cloud workspace
-│   ├── kube-config.hcl             ← per-tenant kube creds (env-var indirection)
-│   ├── vault-config.hcl            ← per-tenant Vault address + token
-│   ├── dev/
-│   │   ├── env.hcl
-│   │   └── {consul, jenkins, kafka, prometheus, vault, vault-secrets}/terragrunt.hcl
-│   └── local/
-│       ├── env.hcl
-│       └── {cert-manager, consul, jenkins, kafka, prometheus, service-accounts, vault, vault-secrets}/terragrunt.hcl
-└── renesas/
-    ├── backend.hcl
-    ├── kube-config.hcl
-    ├── vault-config.hcl
-    ├── dev/   …
-    └── local/ …
+on-prem/<tenant>/
+├── backend.hcl                  ← Terraform Cloud workspace + docker/github/ssh secrets
+├── kube-config.hcl              ← KUBE_HOST + base64 client_key/cert/ca + KUBE_TOKEN (env-var indirection)
+├── vault-config.hcl             ← VAULT_ADDR + VAULT_TOKEN (env-var indirection)
+│
+├── dev/
+│   ├── env.hcl                  ← per-(tenant, env) — secret bundles for k3s/keycloak/db/agile/…
+│   ├── apps/                    ← gitops Apps managed by ArgoCD
+│   ├── cert-manager/            ← self-contained chart submodule (helm/charts/cert-manager)
+│   ├── external-secrets/        ← namespaced ESO + Vault token
+│   ├── k3s/                     ← cluster-bootstrap addons (helm meta-module ×6+)
+│   ├── kafka-ui/                ← self-contained chart submodule
+│   ├── keycloak/                ← self-contained chart submodule
+│   ├── loki/                    ← self-contained chart submodule
+│   ├── prometheus/              ← self-contained chart submodule
+│   ├── service-accounts/        ← k8s SAs + RBAC
+│   ├── vault-roles/             ← Vault AppRole + policies
+│   └── vault-secrets/           ← Vault KV-v2 mount + secrets seeding
+│
+└── local/                       ← engineer laptop k3d (minimal subset)
+    ├── env.hcl
+    ├── apps/   external-secrets/   k3s/   vault-roles/   vault-secrets/
 ```
 
-Each tenant's `terragrunt.hcl` files reference the matching tenant subtree
-in the modules sibling repo:
+**Tenant lives only in this repo.** Each tenant calls the same generic
+module from `devops-terraform-modules` with different inputs.
+
+## Module-source conventions
+
+Every leaf points at the canonical generic module:
 
 ```hcl
-# on-prem/bosch/dev/jenkins/terragrunt.hcl
-terraform {
-  source = "../../../../../devops-terraform-modules//on-prem/bosch/jenkins"
-}
+# Bootstrap addons (k3s leaf — calls helm meta-module 6×+ internally)
+source = "../../../../../devops-terraform-modules//on-prem/k3s"
+
+# Self-contained chart submodule (cert-manager, kafka-ui, keycloak, loki, prometheus)
+source = "../../../../../devops-terraform-modules//on-prem/helm/charts/<chart>"
+
+# Non-helm generic modules
+source = "../../../../../devops-terraform-modules//on-prem/<module>"
+# ↑ apps, external-secrets, service-accounts, vault-roles, vault-secrets
 ```
 
-## Cloud layout
+The `5 ../`s assume sibling repos under the same parent dir
+(`Infrastrutures/devops-terragrunt-environments` and
+`Infrastrutures/devops-terraform-modules`).
 
-| Cloud | Path shape |
-|---|---|
-| AWS   | `aws/<account>/<region>/<environment>/<resource>/terragrunt.hcl` |
-| Azure | `azure/<region>/<environment>/<resource>/terragrunt.hcl` |
-| GCP   | `gcp/<region>/<environment>/<resource>/terragrunt.hcl` |
+## Wrapper script contract
 
-Cloud accounts/subscriptions are themselves the tenant boundary — adding a
-tenant means adding a new account or subscription, not subdividing within.
+```bash
+./deployments/on-prem/build.sh   <tenant> <env> [module]
+./deployments/on-prem/deploy.sh  <tenant> <env> [module]
+./deployments/on-prem/destroy.sh <tenant> <env> [module]
+```
 
-## Apply / Destroy
+Examples:
+```bash
+./deployments/on-prem/build.sh bosch local
+./deployments/on-prem/deploy.sh renesas dev k3s
+./deployments/on-prem/destroy.sh bosch dev
+```
 
-### Authentication
+The wrappers:
+1. Source `deployments/utils/{utils,envs}.sh` (logging helpers + baseline env vars).
+2. Source every `*.bash` under `deployments/on-prem/<tenant>/envs/<env>/`
+   — these run `vault login` and export `KUBE_*` from Vault.
+3. `cd on-prem/<tenant>/<env>[/module]` and run terragrunt.
 
-#### On-prem (k3s + Vault)
-The wrapper scripts source `deployments/on-prem/<tenant>/envs/<env>/deploy-env.bash`
-which reads cluster credentials from Vault using a session token you provide:
+## Authentication
 
 ```bash
 export VAULT_ADDR=https://vault.<tenant>.example.com
 export VAULT_TOKEN=hvs.xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 ```
 
-#### Azure
-See [Terraform AzureRM Authentication](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs#authenticating-to-azure).
-Local: `az login`. CI: Managed Service Identity or OpenID Connect.
+Then the wrapper's `deploy-env.bash` reads kube creds from Vault path
+`<env>/k3s/creds` and exports them as `KUBE_*` env vars; the root
+terragrunt template generates `kubernetes`, `helm`, `kubectl`, `vault`
+providers from those.
 
-#### AWS / GCP
-Provider-side credentials via env vars or workload identity.
+## CI
 
-### Execution — on-prem
+`plm.Jenkinsfile`:
+- **Parameters:** `tenant` (`bosch`/`renesas`), `terraform_module` (specific module or empty for `run-all`).
+- **Branch → ENVIRONMENT:** `env.GIT_BRANCH` is consumed as the env name.
+- **`loadSecrets`:** wraps stages with Jenkins file credentials
+  (`k3s-env`, `agile-app-env`, `agile-db-env`, `hikari-conn-env`,
+  `ldap-env`, `pod-restart-collector-env`, `query-env`, `vault-env`).
 
-**New CLI shape (tenant-aware):**
-
+A pipeline run on the `dev` branch with `tenant=bosch, terraform_module=k3s`
+is equivalent to:
 ```bash
-# Plan
-./deployments/on-prem/build.sh   <tenant> <environment> [module]
-
-# Apply
-./deployments/on-prem/deploy.sh  <tenant> <environment> [module]
-
-# Tear down
-./deployments/on-prem/destroy.sh <tenant> <environment> [module]
-```
-
-Examples:
-
-```bash
-# Plan everything for bosch local
-./deployments/on-prem/build.sh bosch local
-
-# Apply only jenkins for renesas dev
-./deployments/on-prem/deploy.sh renesas dev jenkins
-
-# Destroy everything for bosch dev
-./deployments/on-prem/destroy.sh bosch dev
-```
-
-The wrappers `cd` into `on-prem/<tenant>/<environment>` and either run the
-single requested module or `terragrunt run-all` across the directory.
-
-### Execution — manual / no wrapper
-
-```bash
-cd on-prem/bosch/local
-rm -rf **/.terragrunt-cache* **/.terraform.lock.hcl
-terragrunt run-all init
-terragrunt run-all apply
+./deployments/on-prem/build.sh  bosch dev k3s
+./deployments/on-prem/deploy.sh bosch dev k3s
 ```
 
 ## Adding a new tenant
 
-1. Create `on-prem/<tenant>/{backend,kube-config,vault-config}.hcl` with
-   tenant-specific values (TFC workspace, vault addr, kube creds).
-2. Copy `on-prem/<existing-tenant>/<env>` → `on-prem/<tenant>/<env>` and
-   adjust `env.hcl` + per-resource `terragrunt.hcl` source paths to point at
-   `devops-terraform-modules//on-prem/<tenant>/<resource>`.
-3. Create `deployments/on-prem/<tenant>/envs/<env>/deploy-env.bash` with
-   tenant-specific runtime vars (k3s ip ranges, secrets paths, registry).
-4. Mirror the new tenant subtree in
-   [`devops-terraform-modules`](../devops-terraform-modules/) under
-   `on-prem/<tenant>/<resource>`.
-5. Add the tenant to the `tenant` parameter choices in `Jenkinsfile`
-   and `plm.Jenkinsfile`.
+```bash
+TENANT=customer-x
 
-## Adding a new environment to an existing tenant
+# 1. Per-tenant config (copy from existing)
+mkdir -p on-prem/${TENANT}/{dev,local}
+cp on-prem/bosch/{backend,kube-config,vault-config}.hcl on-prem/${TENANT}/
+
+# 2. Mirror env trees from the closest tenant
+cp -R on-prem/bosch/dev/   on-prem/${TENANT}/dev/
+cp -R on-prem/bosch/local/ on-prem/${TENANT}/local/
+# Edit env.hcl for tenant-specific secret paths, then per-leaf inputs.
+
+# 3. Per-tenant runtime env-vars
+mkdir -p deployments/on-prem/${TENANT}/envs/{dev,local,stg,prod}
+cp deployments/on-prem/bosch/envs/*/deploy-env.bash.example deployments/on-prem/${TENANT}/envs/.../
+
+# 4. Add ${TENANT} to plm.Jenkinsfile's `tenant` parameter choices.
+# 5. Generate the per-tenant ansible-vault password file at
+#    ~/.config/ansible-vault/${TENANT} (filesystem-only, not in repo).
+```
+
+## Adding a new environment
 
 ```bash
 TENANT=bosch
-NEW_ENV=staging
+NEW_ENV=stg
 
-cp -R on-prem/${TENANT}/dev    on-prem/${TENANT}/${NEW_ENV}
-# edit on-prem/${TENANT}/${NEW_ENV}/env.hcl  (set environment = "staging")
+cp -R on-prem/${TENANT}/dev   on-prem/${TENANT}/${NEW_ENV}
+# Edit on-prem/${TENANT}/${NEW_ENV}/env.hcl  (set environment = "stg")
 
 mkdir -p deployments/on-prem/${TENANT}/envs/${NEW_ENV}
-cp deployments/on-prem/${TENANT}/envs/dev/deploy-env.bash \
-   deployments/on-prem/${TENANT}/envs/${NEW_ENV}/deploy-env.bash
-# edit the new deploy-env.bash for staging-specific vars
+cp deployments/on-prem/${TENANT}/envs/dev/deploy-env.bash.example \
+   deployments/on-prem/${TENANT}/envs/${NEW_ENV}/deploy-env.bash.example
 ```
 
-## CI
+## Cloud env trees
 
-Jenkinsfiles (`Jenkinsfile`, `plm.Jenkinsfile`) declare two parameters:
+Shape: `<cloud>/<account-or-region>/<region>/<env>/<resource>/terragrunt.hcl`.
+Today these are 0-byte stubs reserved for future work; cloud account or
+subscription is itself the tenant boundary.
 
-- `tenant` — choice between `bosch` and `renesas`.
-- `terraform_module` — single module name, or empty for `run-all`.
+## See also
 
-Branch name is consumed as `ENVIRONMENT`. So a pipeline run on the `dev`
-branch with `tenant=bosch, terraform_module=jenkins` is equivalent to:
-
-```bash
-./deployments/on-prem/build.sh bosch dev jenkins
-./deployments/on-prem/deploy.sh bosch dev jenkins
-```
+- [`devops-terraform-modules/`](../devops-terraform-modules/) — the modules consumed here.
+- `devops-tools/` — Ansible inventories, Vagrant scenarios, Packer image baking.

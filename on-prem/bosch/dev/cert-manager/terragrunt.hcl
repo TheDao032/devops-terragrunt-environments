@@ -2,7 +2,7 @@ locals {
 }
 
 terraform {
-  source = "../../../../../devops-terraform-modules//on-prem/bosch/cert-manager"
+  source = "../../../../../devops-terraform-modules//on-prem/helm/charts/cert-manager"
   # source = "git::git@github.com:TheDao032/demo-terraform-modules.git//amazon-web-service/eks?ref=${local.environment}"
 }
 
