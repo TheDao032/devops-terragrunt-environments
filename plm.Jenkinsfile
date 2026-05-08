@@ -1,9 +1,14 @@
 pipeline {
     parameters {
         choice(
+            name: 'tenant',
+            choices: ['bosch', 'renesas'],
+            description: 'Tenant whose terragrunt env tree should be applied'
+        )
+        choice(
             name: 'terraform_module',
             choices: ['', 'vault-secrets', 'jenkins', 'kafka', 'prometheus', 'consul', 'vault'],
-            description: 'Select one of the options'
+            description: 'Single module to apply (empty = run-all under the tenant + env)'
         )
     }
     agent {
@@ -11,6 +16,7 @@ pipeline {
     }
     environment {
         LOCATION = 'on-prem' // Set LOCATION as 'on-prem'
+        TENANT = "${params.tenant}"
         ENVIRONMENT = "${env.GIT_BRANCH}" // Dynamically get the Git branch
         CREDENTIAL_IDS = ["k3s-env", "agile-app-env", "agile-db-env",
                           "agile-db-env", "hikari-conn-env", "ldap-env",
@@ -28,9 +34,9 @@ pipeline {
                         chmod +x -R deployments
 
                         if [[ -n "${terraformModule}" ]]; then
-                          deployments/${LOCATION}/build.sh ${ENVIRONMENT} ${terraformModule}
+                          deployments/${LOCATION}/build.sh ${TENANT} ${ENVIRONMENT} ${terraformModule}
                         else
-                          deployments/${LOCATION}/build.sh ${ENVIRONMENT}
+                          deployments/${LOCATION}/build.sh ${TENANT} ${ENVIRONMENT}
                         fi
                         """
                     }, credentialIdsList)
@@ -40,6 +46,7 @@ pipeline {
         stage('Terragrunt deploy') {
             steps {
                 input(message: 'Proceed with Terragrunt apply?') // Optional for manual approval
+                script {
                     def credentialIdsList = CREDENTIAL_IDS
 
                     // Pass the list of credential IDs as an argument
@@ -49,9 +56,9 @@ pipeline {
                         cd terragrunt-environments
 
                         if [[ -n "${terraformModule}" ]]; then
-                          deployments/${LOCATION}/deploy.sh ${ENVIRONMENT} ${terraformModule}
+                          deployments/${LOCATION}/deploy.sh ${TENANT} ${ENVIRONMENT} ${terraformModule}
                         else
-                          deployments/${LOCATION}/deploy.sh ${ENVIRONMENT}
+                          deployments/${LOCATION}/deploy.sh ${TENANT} ${ENVIRONMENT}
                         fi
                         """
                     }, credentialIdsList)
@@ -65,10 +72,10 @@ pipeline {
     //         script {
     //             sh """
     //             cd terragrunt-environments
-    //             if [[ -n "${TERRAFORM_MODULE}" ]]; then
-    //               deployments/${LOCATION}/post.sh ${ENVIRONMENT} ${params.terraform_module}
+    //             if [[ -n "${params.terraform_module}" ]]; then
+    //               deployments/${LOCATION}/post.sh ${TENANT} ${ENVIRONMENT} ${params.terraform_module}
     //             else
-    //               deployments/${LOCATION}/post.sh ${ENVIRONMENT}
+    //               deployments/${LOCATION}/post.sh ${TENANT} ${ENVIRONMENT}
     //             fi
     //             """
     //         }
@@ -93,4 +100,3 @@ def loadSecrets (Closure body, List<String> credentialIds) {
         body()
     }
 }
-

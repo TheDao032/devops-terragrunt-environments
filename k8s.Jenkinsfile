@@ -30,7 +30,7 @@ pipeline {
                 withVault([
                     vaultSecrets: [
                         [
-                            path: "${ENVIRONMENT}/data/k3s/creds",
+                            path: "${ENVIRONMENT}/k3s/creds",
                             engineVersion: 2,
                             secretValues: [
                                 [envVar: 'KUBE_HOST', vaultKey: 'host'],
@@ -43,7 +43,7 @@ pipeline {
                     ],
                     vaultCredentialId: 'vault-jenkins-token'
                 ]) {
-                    container('terragrunt') {
+                    container('infra') {
                         script {
                             // Configure kubectl to use host and certificates
                             sh """
@@ -66,13 +66,15 @@ pipeline {
     stage('Terragrunt build') {
         steps {
             script {
-                sh """
-                if [[ -n "${TERRAFORM_MODULE}" ]]; then
-                  deployments/${LOCATION}/build.sh ${ENVIRONMENT} ${params.terraform_module}
-                else
-                  deployments/${LOCATION}/build.sh ${ENVIRONMENT}
-                fi
-                """
+                container('infra') {
+                    sh """
+                    if [[ -n "${TERRAFORM_MODULE}" ]]; then
+                      deployments/${LOCATION}/build.sh ${ENVIRONMENT} ${params.terraform_module}
+                    else
+                      deployments/${LOCATION}/build.sh ${ENVIRONMENT}
+                    fi
+                    """
+                }
             }
         }
     }
@@ -81,13 +83,15 @@ pipeline {
         steps {
             input(message: 'Proceed with Terragrunt apply?') // Optional for manual approval
             script {
-                sh """
-                if [[ -n "${TERRAFORM_MODULE}" ]]; then
-                  deployments/${LOCATION}/deploy.sh ${ENVIRONMENT} ${params.terraform_module}
-                else
-                  deployments/${LOCATION}/deploy.sh ${ENVIRONMENT}
-                fi
-                """
+                container('infra') {
+                    sh """
+                    if [[ -n "${TERRAFORM_MODULE}" ]]; then
+                      deployments/${LOCATION}/deploy.sh ${ENVIRONMENT} ${params.terraform_module}
+                    else
+                      deployments/${LOCATION}/deploy.sh ${ENVIRONMENT}
+                    fi
+                    """
+                }
             }
         }
     }

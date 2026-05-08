@@ -1,58 +1,97 @@
 #!/usr/bin/env bash
 
 # ---------------------------------------------------------------------------------------------------------------------
-# RUN TERRAGRUNT PLAN-ALL, OUTPUT THE PLAN TO THE TERMINAL AND TO A LOG FILE
+# Run terragrunt apply for a tenant + environment under on-prem.
+#
+# Usage:
+#   ./deployments/on-prem/deploy.sh <tenant> <environment> [module]
+#
+# Examples:
+#   ./deployments/on-prem/deploy.sh bosch   local
+#   ./deployments/on-prem/deploy.sh renesas dev jenkins
 # ---------------------------------------------------------------------------------------------------------------------
 
 set -euo pipefail
 
-ENVIRONMENT=${1:-"local"}
-MODULE=${2:-""}
+usage() {
+  cat <<EOF
+Usage: $(basename "$0") <tenant> <environment> [module]
+
+  tenant       e.g. bosch | renesas
+  environment  e.g. local | dev | stg | prod
+  module       (optional) single resource to act on; default = all
+
+Optional positional args (advanced):
+  4: APPLY_LOG_FILE_NAME  (default: apply-<env>.log)
+EOF
+}
+
+if [[ $# -lt 2 || "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+  usage
+  exit 2
+fi
+
+TENANT="${1}"
+ENVIRONMENT="${2}"
+MODULE="${3:-}"
 
 UTILS_DIR="deployments/utils/utils.sh"
 ENVS_DIR="deployments/utils/envs.sh"
 
 SCRIPT_ABS_PATH="$( realpath "${0}")"
-LIB_DIR="${SCRIPT_ABS_PATH%/*}/envs/${ENVIRONMENT}"
-# LIB_DIR="deployments/${LOCATION}/envs/${ENVIRONMENT}"
+LIB_DIR="${SCRIPT_ABS_PATH%/*}/${TENANT}/envs/${ENVIRONMENT}"
 
 if [ -e "${UTILS_DIR}" ]; then
     source "${UTILS_DIR}"
 else
-    echo "The file '${UTILS_DIR}' does not exist."
+    echo "WARN: '${UTILS_DIR}' does not exist; logging helpers will be unavailable."
 fi
 
 if [ -e "${ENVS_DIR}" ]; then
-    source "${ENVS_DIR}" ${ENVIRONMENT}
+    source "${ENVS_DIR}" "${ENVIRONMENT}"
 else
-    echo "The file '${ENVS_DIR}' does not exist."
+    echo "WARN: '${ENVS_DIR}' does not exist; baseline env-vars will not be exported."
 fi
 
-for LIB_FILE in "${LIB_DIR}"/*.bash; do
-  # source "${UTILS_DIR}"
-  source "${LIB_FILE}" ${ENVIRONMENT} || { log_info "$(date -u) - FATAL - failure occured while reading ${LIB_FILE}"; exit 1; }
+if [[ ! -d "${LIB_DIR}" ]]; then
+  echo "ERROR: tenant env-vars directory not found: ${LIB_DIR}" >&2
+  echo "       expected: deployments/on-prem/${TENANT}/envs/${ENVIRONMENT}/*.bash" >&2
+  exit 3
+fi
+
+shopt -s nullglob
+LIB_FILES=( "${LIB_DIR}"/*.bash )
+shopt -u nullglob
+
+if [[ ${#LIB_FILES[@]} -eq 0 ]]; then
+  echo "ERROR: no *.bash files in ${LIB_DIR} — did you copy *.bash.example to *.bash and fill it in?" >&2
+  exit 3
+fi
+
+for LIB_FILE in "${LIB_FILES[@]}"; do
+  source "${LIB_FILE}" "${ENVIRONMENT}" || { log_info "$(date -u) - FATAL - failure occured while reading ${LIB_FILE}"; exit 1; }
 done
 
-APPLY_LOG_FILE_NAME=${3:-"init-${ENVIRONMENT}.log"}
+LOCATION="${LOCATION:-on-prem}"
+APPLY_LOG_FILE_NAME="${4:-apply-${ENVIRONMENT}.log}"
 
-# Clear Terraform and Terragrunt cache
+# Clear Terraform and Terragrunt cache (uncomment if cache rot is suspected)
 # log_info "$(date -u) - INFO - Clearing Terraform and Terragrunt cache"
 # find . -name ".terraform" -type d -exec rm -rf {} +
 # find . -name ".terragrunt-cache" -type d -exec rm -rf {} +
 
 if [[ -n "${MODULE}" ]]; then
-  cd ${LOCATION}/${ENVIRONMENT}/${MODULE}
+  cd "${LOCATION}/${TENANT}/${ENVIRONMENT}/${MODULE}"
 
-  terragrunt apply -auto-approve -no-color --terragrunt-non-interactive --terragrunt-include-external-dependencies 2>&1 | tee /tmp/terragrunt-apply.log
-  terragrunt output -json -no-color --terragrunt-non-interactive --terragrunt-include-external-dependencies 2>&1 | tee /tmp/terragrunt-output
+  terragrunt apply  -auto-approve -no-color --terragrunt-non-interactive --terragrunt-include-external-dependencies 2>&1 | tee /tmp/terragrunt-apply.log
+  terragrunt output -json         -no-color --terragrunt-non-interactive --terragrunt-include-external-dependencies 2>&1 | tee /tmp/terragrunt-output
 else
-  # Run apply all and display output both to terminal and the log file temp.log
-  cd ${LOCATION}/${ENVIRONMENT}
+  cd "${LOCATION}/${TENANT}/${ENVIRONMENT}"
 
-  terragrunt run-all apply -auto-approve -no-color --terragrunt-non-interactive --terragrunt-include-external-dependencies 2>&1 | tee /tmp/terragrunt-apply.log
-  terragrunt run-all output -json -no-color --terragrunt-non-interactive --terragrunt-include-external-dependencies 2>&1 | tee /tmp/terragrunt-output
+  terragrunt run-all apply  -auto-approve -no-color --terragrunt-non-interactive --terragrunt-include-external-dependencies 2>&1 | tee /tmp/terragrunt-apply.log
+  terragrunt run-all output -json         -no-color --terragrunt-non-interactive --terragrunt-include-external-dependencies 2>&1 | tee /tmp/terragrunt-output
 fi
 
 log_path=/tmp/terragrunt
-mkdir -p $log_path
-sed -r "s/\x1B\[([0-9]{1,3}((;[0-9]{1,3})*)?)?[m|K]//g" /tmp/terragrunt-apply.log >> $log_path/${APPLY_LOG_FILE_NAME}
+mkdir -p "$log_path"
+sed -r "s/\x1B\[([0-9]{1,3}((;[0-9]{1,3})*)?)?[m|K]//g" /tmp/terragrunt-apply.log >> "$log_path/${APPLY_LOG_FILE_NAME}"
