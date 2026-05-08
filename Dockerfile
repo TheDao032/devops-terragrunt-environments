@@ -1,9 +1,17 @@
 FROM ubuntu:latest
 
-ENV TERRAFORM_VERSION 1.9.8
-ENV TERRAGRUNT_VERSION 0.69.0
+ENV TERRAFORM_VERSION=1.11.3
+ENV TERRAGRUNT_VERSION=0.77.7
 
 RUN apt update -y && apt install -y unzip wget curl python3 python3-pip apt-transport-https ca-certificates gnupg git openssh-client
+
+WORKDIR /app
+
+RUN curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl" && \
+		install -o root -g root -m 0755 ./kubectl /usr/local/bin/kubectl
+		# chmod +x kubectl && \
+		# mkdir -p ~/.local/bin && \
+		# mv ./kubectl ~/.local/bin/kubectl
 
 RUN wget https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_amd64.zip && \
     unzip terraform_${TERRAFORM_VERSION}_linux_amd64.zip && \
@@ -23,5 +31,3 @@ RUN wget https://github.com/gruntwork-io/terragrunt/releases/download/v${TERRAGR
 #     pip3 install awscli --break-system-packages
 # RUN curl -sL https://aka.ms/InstallAzureCLIDeb | bash
 # RUN curl https://sdk.cloud.google.com > install.sh && bash install.sh --disable-prompts
-
-WORKDIR /app
