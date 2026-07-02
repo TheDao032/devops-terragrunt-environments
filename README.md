@@ -43,10 +43,10 @@ on-prem/<tenant>/
 │
 ├── dev/
 │   ├── env.hcl                  ← per-(tenant, env) — secret bundles for k3s/keycloak/db/agile/…
-│   ├── apps/                    ← gitops Apps managed by ArgoCD
+│   ├── gitops-apps/             ← gitops Apps managed by ArgoCD
 │   ├── cert-manager/            ← self-contained chart submodule (helm/charts/cert-manager)
 │   ├── external-secrets/        ← namespaced ESO + Vault token
-│   ├── k3s/                     ← cluster-bootstrap addons (helm meta-module ×6+)
+│   ├── k3s-resources/           ← cluster-bootstrap addons (helm meta-module ×6+)
 │   ├── kafka-ui/                ← self-contained chart submodule
 │   ├── keycloak/                ← self-contained chart submodule
 │   ├── loki/                    ← self-contained chart submodule
@@ -57,7 +57,7 @@ on-prem/<tenant>/
 │
 └── local/                       ← engineer laptop k3d (minimal subset)
     ├── env.hcl
-    ├── apps/   external-secrets/   k3s/   vault-roles/   vault-secrets/
+    ├── gitops-apps/   external-secrets/   k3s-resources/   vault-roles/   vault-secrets/
 ```
 
 **Tenant lives only in this repo.** Each tenant calls the same generic
@@ -68,15 +68,15 @@ module from `devops-terraform-modules` with different inputs.
 Every leaf points at the canonical generic module:
 
 ```hcl
-# Bootstrap addons (k3s leaf — calls helm meta-module 6×+ internally)
-source = "../../../../../devops-terraform-modules//on-prem/k3s"
+# Bootstrap addons (k3s-resources leaf — calls helm meta-module 6×+ internally)
+source = "../../../../../devops-terraform-modules//on-prem/k3s-resources"
 
 # Self-contained chart submodule (cert-manager, kafka-ui, keycloak, loki, prometheus)
 source = "../../../../../devops-terraform-modules//on-prem/helm/charts/<chart>"
 
 # Non-helm generic modules
 source = "../../../../../devops-terraform-modules//on-prem/<module>"
-# ↑ apps, external-secrets, service-accounts, vault-roles, vault-secrets
+# ↑ gitops-apps, external-secrets, service-accounts, vault-roles, vault-secrets
 ```
 
 The `5 ../`s assume sibling repos under the same parent dir
@@ -94,7 +94,7 @@ The `5 ../`s assume sibling repos under the same parent dir
 Examples:
 ```bash
 ./deployments/on-prem/build.sh bosch local
-./deployments/on-prem/deploy.sh renesas dev k3s
+./deployments/on-prem/deploy.sh renesas dev k3s-resources
 ./deployments/on-prem/destroy.sh bosch dev
 ```
 
@@ -125,11 +125,11 @@ providers from those.
   (`k3s-env`, `agile-app-env`, `agile-db-env`, `hikari-conn-env`,
   `ldap-env`, `pod-restart-collector-env`, `query-env`, `vault-env`).
 
-A pipeline run on the `dev` branch with `tenant=bosch, terraform_module=k3s`
+A pipeline run on the `dev` branch with `tenant=bosch, terraform_module=k3s-resources`
 is equivalent to:
 ```bash
-./deployments/on-prem/build.sh  bosch dev k3s
-./deployments/on-prem/deploy.sh bosch dev k3s
+./deployments/on-prem/build.sh  bosch dev k3s-resources
+./deployments/on-prem/deploy.sh bosch dev k3s-resources
 ```
 
 ## Adding a new tenant

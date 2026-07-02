@@ -13,8 +13,8 @@ locals {
 }
 
 terraform {
-  # source = "../../../../../devops-terraform-modules//on-prem/k3s"
-  source = "../../../../../devops-terraform-modules//on-prem/k3s"
+  # source = "../../../../../devops-terraform-modules//on-prem/k3s-resources"
+  source = "../../../../../devops-terraform-modules//on-prem/k3s-resources"
 }
 
 dependency "external-secrets" {

@@ -4,8 +4,8 @@ locals {
 }
 
 terraform {
-  # source = "../../../../../devops-terraform-modules//on-prem/apps"
-  source = "../../../../../devops-terraform-modules//on-prem/apps"
+  # source = "../../../../../devops-terraform-modules//on-prem/gitops-apps"
+  source = "../../../../../devops-terraform-modules//on-prem/gitops-apps"
 }
 
 dependency "vault-secrets" {
@@ -25,7 +25,7 @@ dependency "vault-secrets" {
 }
 
 dependency "k3s-addons" {
-  config_path = "../k3s"
+  config_path = "../k3s-resources"
   mock_outputs = {
     argocd_namespace = "values"
   }

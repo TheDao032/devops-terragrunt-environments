@@ -8,7 +8,7 @@ pipeline {
   parameters {
     choice(
         name: 'terraform_module',
-        choices: ['', 'vault-secrets', 'vault-roles', 'k3s', 'external-secrets', 'apps'],
+        choices: ['', 'vault-secrets', 'vault-roles', 'k3s-resources', 'external-secrets', 'gitops-apps'],
         description: 'Select one of the options'
     )
   }
