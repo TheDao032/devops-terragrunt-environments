@@ -1,9 +1,9 @@
 # Set common variables for the region. This is automatically pulled in in the root terragrunt.hcl configuration to
 # configure the remote state bucket and pass forward to the child modules as inputs.
 locals {
-  hostname        = "app.terraform.io"
-  organization    = "nthedao_org"
-  workspaces_name = "nthedao_ws"
+  hostname          = "app.terraform.io"
+  tf_organization   = "nthedao_org"
+  tfworkspaces_name = "nthedao_ws"
 
   docker_registry = get_env("DOCKER_REGISTRY", "https://index.docker.io/v1/")
   docker_token    = get_env("DOCKER_TOKEN", "")
