@@ -24,17 +24,21 @@ include {
 }
 
 inputs = {
-  coredns_conf = {
-    helm = {
-      chart_version = "1.10.101-build2021022303"
-      namespace     = "kube-system"
-      repository    = "https://rke2-charts.rancher.io/"
-      release_name  = "rke2-coredns"
-    }
-
-    common = {
-    }
-  }
+  # CoreDNS is managed by k3s itself (rancher/mirrored-coredns-coredns:1.11.3); the lab no
+  # longer disables it. The terraform core-dns module is commented out in addons.tf, so this
+  # input is disabled too. Re-enable both (with a multi-arch image) only if you re-add
+  # --disable=coredns and want terraform to own CoreDNS.
+  # coredns_conf = {
+  #   helm = {
+  #     chart_version = "1.10.101-build2021022303"
+  #     namespace     = "kube-system"
+  #     repository    = "https://rke2-charts.rancher.io/"
+  #     release_name  = "rke2-coredns"
+  #   }
+  #
+  #   common = {
+  #   }
+  # }
 
   external_secrets_conf = {
     helm = {
