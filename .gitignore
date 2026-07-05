@@ -47,6 +47,11 @@ terragrunt-debug.tfvars.json
 
 # Ignore envs bash files
 # deployments/utils/envs.sh
+
+# direnv — local env (may contain machine paths + secrets). Keep the .example tracked.
+.envrc
+.envrc.local
+.direnv/
 # terragrunt.hcl
 
 deployments/**/*.bash

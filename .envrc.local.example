@@ -1,0 +1,15 @@
+# .envrc.local.example — copy to `.envrc.local` (git-ignored) and fill in secrets.
+#   cp .envrc.local.example .envrc.local
+#
+# .envrc sources .envrc.local automatically. Put ONLY secrets / per-machine values here.
+
+# Vault — needed once Vault is initialized (root or a scoped token).
+# export VAULT_ADDR="https://vault.k3s.local"
+# export VAULT_TOKEN="hvs.xxxxxxxx"
+# export VAULT_MASTER_TOKEN="hvs.xxxxxxxx"
+
+# Override the kubeconfig location if not using the default k3s lab path:
+# export KUBECONFIG="$HOME/.kube/config"
+
+# If you ever need bearer-token auth instead of client-cert (you don't, for k3s):
+# export KUBE_TOKEN="$(kubectl -n kube-system create token some-admin-sa)"

@@ -1,9 +1,9 @@
 # Set common variables for the region. This is automatically pulled in in the root terragrunt.hcl configuration to
 # configure the remote state bucket and pass forward to the child modules as inputs.
 locals {
-  vault_config_vars = read_terragrunt_config(find_in_parent_folders("vault-config.hcl"))
-  vault_address     = local.vault_config_vars.locals.address
-  vault_token       = local.vault_config_vars.locals.token
+  # vault_config_vars = read_terragrunt_config(find_in_parent_folders("vault-config.hcl"))
+  # vault_address     = local.vault_config_vars.locals.address
+  # vault_token       = local.vault_config_vars.locals.token
 
   backend_vars            = read_terragrunt_config(find_in_parent_folders("backend.hcl"))
   backend_docker_registry = local.backend_vars.locals.docker_registry
@@ -19,9 +19,8 @@ locals {
 
   backend_artifactory_registry = local.backend_vars.locals.artifactory_registry
 
-  environment        = "local"
-  cluster_name       = "local"
-  external_server_ip = get_env("K3S_SERVER_1")
+  environment  = "local"
+  cluster_name = "local"
 
   secrets = {
     "artifactory/params" = {
@@ -79,13 +78,15 @@ locals {
       clientPassword = "{ _RANDOM_ = 18 }"
     }
 
-    "vault/params" = {
-      clusterAddr = local.vault_address
-    }
-
-    "vault/creds" = {
-      rootToken = local.vault_token
-    }
+    # Commented until Vault is deployed + initialized — vault_address / vault_token
+    # come from vault-config.hcl (uncommented above at that stage).
+    # "vault/params" = {
+    #   clusterAddr = local.vault_address
+    # }
+    #
+    # "vault/creds" = {
+    #   rootToken = local.vault_token
+    # }
 
     "database/params" = {
       DBClusterEndpoint = get_env("DB_CLUSTER_ENDPOINT", "192.168.56.31")
@@ -99,7 +100,7 @@ locals {
     }
 
     "podRestartCollector/creds" = {
-      slackWebhookUrl = get_env("SLACK_WEBHOOK_URL")
+      slackWebhookUrl = get_env("SLACK_WEBHOOK_URL", "")
     }
   }
 

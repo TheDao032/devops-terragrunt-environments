@@ -7,5 +7,5 @@ locals {
   client_certificate     = get_env("KUBE_CLIENT_CERT_DATA")
   cluster_ca_certificate = get_env("KUBE_CLUSTER_CA_CERT_DATA")
 
-  token = get_env("KUBE_TOKEN")
+  token = get_env("KUBE_TOKEN", "")
 }

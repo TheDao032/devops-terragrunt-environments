@@ -3,7 +3,7 @@ locals {
   environment      = local.environment_vars.locals.environment
 
   org_config_vars = read_terragrunt_config(find_in_parent_folders("org.hcl"))
-  org_name = local.org_config_vars.
+  org_name        = local.org_config_vars.locals.infras_organization
 
   # vault_config_vars       = read_terragrunt_config(find_in_parent_folders("vault-config.hcl"))
   # vault_address           = local.vault_config_vars.locals.address
@@ -15,15 +15,27 @@ locals {
 }
 
 terraform {
-  # source = "../../../../../devops-terraform-modules//on-prem/k3s-resources"
-  source = "../../../../../devops-terraform-modules//on-prem/k3s-resources"
+  source = "../../../../../devops-terraform-modules//on-prem/${local.org_name}/k3s-resources"
+  # source = "git::git@github.com:TheDao032/devops-terraform-modules.git//on-prem/${local.org_name}/k3s-resources?ref=${local.environment}"
 }
 
 include {
-  path = find_in_parent_folders()
+  path = find_in_parent_folders("root.hcl")
 }
 
 inputs = {
+  coredns_conf = {
+    helm = {
+      chart_version = "1.10.101-build2021022303"
+      namespace     = "kube-system"
+      repository    = "https://rke2-charts.rancher.io/"
+      release_name  = "rke2-coredns"
+    }
+
+    common = {
+    }
+  }
+
   external_secrets_conf = {
     helm = {
       chart_version = "2.7.0"
@@ -36,15 +48,54 @@ inputs = {
     }
   }
 
-  vault_conf = {
+  # Controller + CRDs only (self-signed issuers) — deploys BEFORE vault so its
+  # Certificate/Issuer manifests have the CRDs available. No ACME/Cloudflare here.
+  cert_manager_conf = {
     helm = {
-      chart_version = "2.7.0"
-      namespace     = "kube-system"
-      repository    = "https://charts.external-secrets.io/"
-      release_name  = "external-secrets"
+      chart_version = "1.16.1"
+      namespace     = "cert-manager"
+      repository    = "https://charts.jetstack.io"
+      release_name  = "cert-manager"
+      values_type   = "controller"
     }
 
     common = {
+    }
+  }
+
+  vault_conf = {
+    helm = {
+      chart_version = "0.34.0"
+      namespace     = "vault" # isolated ns; cert SANs use <svc>.vault.svc.cluster.local
+      repository    = "https://helm.releases.hashicorp.com/"
+      release_name  = "vault"
+      values_type   = "ha-raft-tls" # → loads values.ha-raft-tls.yml.tftpl
+    }
+
+    # server.* → resources + Raft data/audit PVCs in the values template
+    server = {
+      rq_mem     = "512Mi"
+      rq_cpu     = "250m"
+      limits_mem = "1Gi"
+      limits_cpu = "500m"
+
+      datastore_size       = "10Gi"
+      datastore_mount_path = "/vault/datastore" # == storage "raft" path
+
+      auditstore_size       = "10Gi"
+      auditstore_mount_path = "/vault/auditstore"
+    }
+
+    ui = {
+      enabled = true
+    }
+
+    common = {
+      sc_name               = "vault-sc"         # StorageClass created by sc.yml.tftpl
+      vault_service_name    = "vault"            # MUST equal helm.release_name (retry_join + cert SANs)
+      vault_tls_server_name = "vault-tls-server" # cert-manager server-cert secret (mounted)
+      vault_tls_ca_name     = "vault-tls-ca"     # cert-manager CA secret
+      host                  = "vault.k3s.local"  # Traefik ingress host + cert SAN
     }
   }
 
@@ -118,18 +169,6 @@ inputs = {
   #     limits_mem   = "512Mi"
   #     limits_cpu   = "100m"
   #     storage_size = "10Gi"
-  #   }
-  # }
-  #
-  # coredns_conf = {
-  #   helm = {
-  #     chart_version = "1.10.101-build2021022303"
-  #     namespace     = "kube-system"
-  #     repository    = "https://rke2-charts.rancher.io/"
-  #     release_name  = "rke2-coredns"
-  #   }
-  #
-  #   common = {
   #   }
   # }
   #
@@ -230,4 +269,5 @@ inputs = {
   #
   # traefik_gateway_api_conf = {
   # }
+
 }
