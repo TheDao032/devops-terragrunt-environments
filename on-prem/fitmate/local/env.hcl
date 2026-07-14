@@ -19,6 +19,9 @@ locals {
 
   backend_artifactory_registry = local.backend_vars.locals.artifactory_registry
 
+  org_vars       = read_terragrunt_config(find_in_parent_folders("org.hcl"))
+  org_infras_org = local.org_vars.locals.infras_organization
+
   environment  = "local"
   cluster_name = "local"
 
@@ -58,25 +61,25 @@ locals {
       password = "{ _RANDOM_ = 18 }"
     }
 
-    "jenkins/creds" = {
-      username = "admin"
-      password = "{ _RANDOM_ = 18 }"
-    }
-
-    "grafana/creds" = {
-      username = "admin"
-      password = "{ _RANDOM_ = 18 }"
-    }
-
-    "loki/creds" = {
-      username = "admin"
-      password = "{ _RANDOM_ = 18 }"
-    }
-
-    "kafka/creds" = {
-      clientUsername = "admin"
-      clientPassword = "{ _RANDOM_ = 18 }"
-    }
+    # "jenkins/creds" = {
+    #   username = "admin"
+    #   password = "{ _RANDOM_ = 18 }"
+    # }
+    #
+    # "grafana/creds" = {
+    #   username = "admin"
+    #   password = "{ _RANDOM_ = 18 }"
+    # }
+    #
+    # "loki/creds" = {
+    #   username = "admin"
+    #   password = "{ _RANDOM_ = 18 }"
+    # }
+    #
+    # "kafka/creds" = {
+    #   clientUsername = "admin"
+    #   clientPassword = "{ _RANDOM_ = 18 }"
+    # }
 
     # Commented until Vault is deployed + initialized — vault_address / vault_token
     # come from vault-config.hcl (uncommented above at that stage).
@@ -88,26 +91,29 @@ locals {
     #   rootToken = local.vault_token
     # }
 
-    "database/params" = {
-      DBClusterEndpoint = get_env("DB_CLUSTER_ENDPOINT", "192.168.56.31")
-      DBClusterPort     = 5432
-    }
+    # "database/params" = {
+    #   DBClusterEndpoint = get_env("DB_CLUSTER_ENDPOINT", "192.168.56.31")
+    #   DBClusterPort     = 5432
+    # }
+    #
+    # "database/admin-service/creds" = {
+    #   username = "fiesta"
+    #   password = "{ _RANDOM_ = 18 }"
+    #   database = "fiesta"
+    # }
 
-    "database/admid-service/creds" = {
-      username = "fiesta"
-      password = "{ _RANDOM_ = 18 }"
-      database = "fiesta"
-    }
-
-    "podRestartCollector/creds" = {
-      slackWebhookUrl = get_env("SLACK_WEBHOOK_URL", "")
-    }
+    # "podRestartCollector/creds" = {
+    #   slackWebhookUrl = get_env("SLACK_WEBHOOK_URL", "")
+    # }
   }
 
-  cloudflare_api_token = get_env("CLOUDFLARE_API_TOKEN", "")
+  # cloudflare_api_token = get_env("CLOUDFLARE_API_TOKEN", "")
 
   tags = {
-    created_by = "terraform"
+    created_by    = "terraform"
+    environment   = local.environment
+    organiazation = local.org_infras_org
   }
+
 
 }

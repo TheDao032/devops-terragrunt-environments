@@ -8,6 +8,13 @@
 # export VAULT_TOKEN="hvs.xxxxxxxx"
 # export VAULT_MASTER_TOKEN="hvs.xxxxxxxx"
 
+# Container registry + VCS secrets (feed the vault-secrets `secrets` map). The NON-secret
+# counterparts (DOCKER_REGISTRY/USERNAME/EMAIL, GITHUB_USERNAME, ARTIFACTORY_REGISTRY) have
+# defaults in .envrc — only override them there/here if they differ per machine.
+# export DOCKER_TOKEN="dckr_pat_xxxxxxxx"
+# export GITHUB_TOKEN="ghp_xxxxxxxx"
+# export SSH_PRIVATE_KEY="$(cat "$HOME/.ssh/gitops_ed25519")"
+
 # Override the kubeconfig location if not using the default k3s lab path:
 # export KUBECONFIG="$HOME/.kube/config"
 
