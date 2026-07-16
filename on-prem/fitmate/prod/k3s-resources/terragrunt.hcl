@@ -2,7 +2,7 @@ locals {
   environment_vars = read_terragrunt_config(find_in_parent_folders("env.hcl"))
   environment      = local.environment_vars.locals.environment
 
-  vault_config_vars       = read_terragrunt_config(find_in_parent_folders("vault-config.hcl"))
+  vault_config_vars       = read_terragrunt_config(find_in_parent_folders("vault.hcl"))
   vault_address           = local.vault_config_vars.locals.address
   vault_token             = local.vault_config_vars.locals.token
   vault_token_secret_name = "vault-token"
@@ -51,10 +51,12 @@ dependency "vault-secrets" {
       }
 
       "github/creds" = {
-        token = "string"
+        ssh_priv_key = "string"
+        token        = "string"
+        username     = "string"
       }
 
-      "vault/approle/${local.environment}/creds" = {
+      "vault/approle/jenkins_app/creds" = {
         client_token = "string",
         role_id      = "string",
         secret_id    = "string"
@@ -74,7 +76,7 @@ dependency "vault-secrets" {
   mock_outputs_merge_strategy_with_state = "shallow"
 }
 
-include {
+include "root" {
   path = find_in_parent_folders("root.hcl")
 }
 

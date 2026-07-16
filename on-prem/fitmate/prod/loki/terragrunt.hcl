@@ -23,7 +23,7 @@ dependency "vault-secrets" {
   mock_outputs_merge_strategy_with_state = "shallow"
 }
 
-include {
+include "root" {
   path = find_in_parent_folders("root.hcl")
 }
 

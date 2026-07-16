@@ -8,15 +8,15 @@ terraform {
   # source = "git::git@github.com:TheDao032/devops-terraform-modules.git//on-prem/shared/vault-auth?ref=${local.environment}"
 }
 
-# root.hcl → kube providers + backend. vault-config.hcl → the vault provider (address/token
-# from VAULT_ADDR/VAULT_TOKEN env, empty defaults). Only vault stacks include vault-config.hcl,
+# root.hcl → kube providers + backend. vault.hcl → the vault provider (address/token
+# from VAULT_ADDR/VAULT_TOKEN env, empty defaults). Only vault stacks include vault.hcl,
 # so non-vault stacks never get a vault provider.
 include "root" {
   path = find_in_parent_folders("root.hcl")
 }
 
 include "vault" {
-  path = find_in_parent_folders("vault-config.hcl")
+  path = find_in_parent_folders("vault.hcl")
 }
 
 inputs = {

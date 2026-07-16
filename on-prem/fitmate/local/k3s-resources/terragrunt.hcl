@@ -5,7 +5,7 @@ locals {
   org_config_vars = read_terragrunt_config(find_in_parent_folders("org.hcl"))
   org_name        = local.org_config_vars.locals.infras_organization
 
-  vault_config_vars = read_terragrunt_config(find_in_parent_folders("vault-config.hcl"))
+  vault_config_vars = read_terragrunt_config(find_in_parent_folders("vault.hcl"))
   vault_address     = local.vault_config_vars.locals.vault_address
 
   # secret_store_name = "vault-backend"
@@ -17,12 +17,12 @@ terraform {
   # source = "git::git@github.com:TheDao032/devops-terraform-modules.git//on-prem/${local.org_name}/k3s-resources?ref=${local.environment}"
 }
 
-include {
+include "root" {
   path = find_in_parent_folders("root.hcl")
 }
 
 include "vault" {
-  path = find_in_parent_folders("vault-config.hcl")
+  path = find_in_parent_folders("vault.hcl")
 }
 
 
@@ -38,8 +38,8 @@ dependency "vault-auth" {
     }
   }
 
-  mock_outputs_allowed_terraform_commands = ["validate", "plan"]
-  mock_outputs_merge_strategy_with_state  = "shallow"
+  # mock_outputs_allowed_terraform_commands = ["validate", "plan"]
+  mock_outputs_merge_strategy_with_state = "shallow"
 }
 
 # ArgoCD reads GitHub/ArgoCD creds from vault-secrets and the ESO SecretStore name from
@@ -56,8 +56,8 @@ dependency "vault-secrets" {
     }
   }
 
-  mock_outputs_allowed_terraform_commands = ["validate", "plan"]
-  mock_outputs_merge_strategy_with_state  = "shallow"
+  # mock_outputs_allowed_terraform_commands = ["validate", "plan"]
+  mock_outputs_merge_strategy_with_state = "shallow"
 }
 
 # dependency "external-secrets" {

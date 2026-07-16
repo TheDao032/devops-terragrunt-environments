@@ -7,7 +7,7 @@ terraform {
   source = "../../../../../devops-terraform-modules//on-prem/service-accounts"
 }
 
-include {
+include "root" {
   path = find_in_parent_folders("root.hcl")
 }
 

@@ -14,6 +14,18 @@ terraform {
 dependency "vault-secrets" {
   config_path = "../vault-secrets"
   mock_outputs = {
+    ldap_secrets = {
+      "ldap/params" = {
+        ldap_server_url = "value"
+      }
+      "ldap/creds" = {
+        ldap_provider_bind_dn             = "value"
+        ldap_provider_bind_credential     = "value"
+        ldap_provider_users_dn            = "value"
+        ldap_provider_user_object_classes = "value"
+      }
+    }
+
     keycloak_secrets = {
       "keycloak/creds" = {
         username               = "value"
@@ -26,6 +38,7 @@ dependency "vault-secrets" {
 
     database_secrets = {
       "Database/keycloak/creds" = {
+        pg_pass     = "value"
         pg_password = "value"
         username    = "value"
         password    = "value"
@@ -36,7 +49,7 @@ dependency "vault-secrets" {
   mock_outputs_merge_strategy_with_state = "shallow"
 }
 
-include {
+include "root" {
   path = find_in_parent_folders("root.hcl")
 }
 

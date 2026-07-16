@@ -2,7 +2,7 @@ locals {
   environment_vars = read_terragrunt_config(find_in_parent_folders("env.hcl"))
   environment      = local.environment_vars.locals.environment
 
-  vault_config_vars = read_terragrunt_config(find_in_parent_folders("vault-config.hcl"))
+  vault_config_vars = read_terragrunt_config(find_in_parent_folders("vault.hcl"))
 
   vault_config = {
     vault_address           = local.vault_config_vars.locals.address
@@ -37,7 +37,7 @@ terraform {
 #   mock_outputs_merge_strategy_with_state = "shallow"
 # }
 
-include {
+include "root" {
   path = find_in_parent_folders("root.hcl")
 }
 

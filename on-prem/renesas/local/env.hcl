@@ -1,7 +1,7 @@
 # Set common variables for the region. This is automatically pulled in in the root terragrunt.hcl configuration to
 # configure the remote state bucket and pass forward to the child modules as inputs.
 locals {
-  vault_config_vars = read_terragrunt_config(find_in_parent_folders("vault-config.hcl"))
+  vault_config_vars = read_terragrunt_config(find_in_parent_folders("vault.hcl"))
   vault_address     = local.vault_config_vars.locals.address
   vault_token       = local.vault_config_vars.locals.token
 

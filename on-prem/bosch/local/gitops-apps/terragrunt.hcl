@@ -17,7 +17,8 @@ dependency "vault-secrets" {
       }
 
       "github/params" = {
-        repo_url = "values"
+        url         = "values"
+        gitops_repo = "values"
       }
     }
   }
@@ -41,7 +42,7 @@ dependency "external-secrets" {
   mock_outputs_merge_strategy_with_state = "shallow"
 }
 
-include {
+include "root" {
   path = find_in_parent_folders("root.hcl")
 }
 

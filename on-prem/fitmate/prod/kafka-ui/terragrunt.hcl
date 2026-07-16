@@ -33,13 +33,18 @@ dependency "kafka" {
 dependency "keycloak" {
   config_path = "../keycloak"
   mock_outputs = {
-    kafka_ui_credentials = {}
+    kafka_ui_credentials = {
+      client_id     = "value"
+      client_name   = "value"
+      client_secret = "value"
+      keycloak_host = "value"
+    }
   }
   mock_outputs_merge_strategy_with_state = "shallow"
 }
 
 
-include {
+include "root" {
   path = find_in_parent_folders("root.hcl")
 }
 

@@ -8,12 +8,8 @@ terraform {
   # source = "git::git@github.com:TheDao032/devops-terraform-modules.git//on-prem/shared/service-accounts?ref=${local.environment}"
 }
 
-include {
+include "root" {
   path = find_in_parent_folders("root.hcl")
-}
-
-include "vault" {
-  path = find_in_parent_folders("vault-config.hcl")
 }
 
 inputs = {

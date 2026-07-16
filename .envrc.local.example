@@ -20,3 +20,7 @@
 
 # If you ever need bearer-token auth instead of client-cert (you don't, for k3s):
 # export KUBE_TOKEN="$(kubectl -n kube-system create token some-admin-sa)"
+
+# HCP Terraform API token — auth to app.terraform.io (org nthedao_org) for the remote backend.
+# Create at: HCP → User Settings → Tokens. See docs/hcp-terraform-backend.md.
+export TF_TOKEN_app_terraform_io="REPLACE_WITH_YOUR_HCP_API_TOKEN"

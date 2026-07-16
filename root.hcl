@@ -5,18 +5,17 @@
 # ---------------------------------------------------------------------------------------------------------------------
 
 locals {
-  # Kube config vars
-  kube_config_vars    = read_terragrunt_config(find_in_parent_folders("kube-config.hcl"))
-  kube_host           = local.kube_config_vars.locals.host
-  kube_config_path    = local.kube_config_vars.locals.config_path
-  kube_config_context = local.kube_config_vars.locals.config_context
+  # Kube provider config now lives in the shared backend.hcl (was per-tenant kube-config.hcl).
+  kube_host           = local.backend_vars.locals.host
+  kube_config_path    = local.backend_vars.locals.config_path
+  kube_config_context = local.backend_vars.locals.config_context
 
-  client_key             = local.kube_config_vars.locals.client_key
-  client_certificate     = local.kube_config_vars.locals.client_certificate
-  cluster_ca_certificate = local.kube_config_vars.locals.cluster_ca_certificate
-  token                  = local.kube_config_vars.locals.token
+  client_key             = local.backend_vars.locals.client_key
+  client_certificate     = local.backend_vars.locals.client_certificate
+  cluster_ca_certificate = local.backend_vars.locals.cluster_ca_certificate
+  token                  = local.backend_vars.locals.token
 
-  # Backend global vars
+  # Backend global vars (+ kube provider config, consolidated here)
   backend_vars      = read_terragrunt_config(find_in_parent_folders("backend.hcl"))
   backend_hostname  = local.backend_vars.locals.hostname
   backend_org       = local.backend_vars.locals.tf_organization
@@ -125,7 +124,6 @@ EOF
 # where terraform_remote_state data sources are placed directly into the modules.
 inputs = merge(
   local.environment_vars.locals,
-  local.backend_vars.locals,
+  local.backend_vars.locals, # includes the kube provider config now
   local.location_vars.locals,
-  local.kube_config_vars.locals
 )
