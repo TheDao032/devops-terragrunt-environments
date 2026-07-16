@@ -5,6 +5,7 @@ locals {
 
 terraform {
   source = "../../../../../devops-terraform-modules//on-prem/shared/vault-auth"
+  # source = "git::git@github.com:TheDao032/devops-terraform-modules.git//on-prem/shared/vault-auth?ref=${local.environment}"
 }
 
 # root.hcl → kube providers + backend. vault-config.hcl → the vault provider (address/token

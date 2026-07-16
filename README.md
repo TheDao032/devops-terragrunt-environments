@@ -175,6 +175,43 @@ Shape: `<cloud>/<account-or-region>/<region>/<env>/<resource>/terragrunt.hcl`.
 Today these are 0-byte stubs reserved for future work; cloud account or
 subscription is itself the tenant boundary.
 
+## Operational gotchas
+
+### ⚠️ Never export bare `KUBE_*` env vars for local runs — use `TG_KUBE_*`
+
+The `hashicorp/kubernetes` (and `helm`, `kubectl`) providers **natively read** a fixed set of
+env vars as their own config: `KUBE_HOST`, `KUBE_CLIENT_CERT_DATA`, `KUBE_CLIENT_KEY_DATA`,
+`KUBE_CLUSTER_CA_CERT_DATA`, `KUBE_CONFIG_PATH`, `KUBE_CTX`, `KUBE_TOKEN`
+([provider docs](https://registry.terraform.io/providers/hashicorp/kubernetes/latest/docs)).
+They expect **raw PEM**. Our kubeconfig `*-data` fields are **base64**, and `root.hcl` /
+`terragrunt.onprems.hcl` generate `provider-kube.tf` with `base64decode(...)`.
+
+If you export the base64 into the bare `KUBE_*` names, the provider **reads the base64 directly
+and overrides the inline `base64decode(...)`** → `'client_certificate' is not a valid PEM encoded
+certificate`. This only bites stacks that actually create `kubernetes_*` resources (e.g.
+`service-accounts`) — `helm`/`kubectl`-only stacks (`k3s-resources`) and `vault`-only stacks
+(`vault-auth`, `vault-secrets`) never configure the kubernetes provider, so they silently work.
+
+- **Local dev** → the repo `.envrc` exports **`TG_KUBE_*`** (prefix hides them from the provider);
+  `on-prem/fitmate/kube-config.hcl` reads `get_env("TG_KUBE_*")`. Use `kubectl config view --minify`
+  so `clusters[0]`/`users[0]` resolve the **current context**, not entry-0 of a merged kubeconfig.
+- **CI (Jenkins, bosch/renesas/aws)** → keeps bare `KUBE_*` because Jenkins injects **raw PEM** from
+  Vault (matches what the provider wants), so those tenants' `kube-config.hcl` still read `KUBE_*`.
+
+### ⚠️ Terraform state lives *inside* `.terragrunt-cache` (no remote backend)
+
+The `generate "backend"` block in `root.hcl` is commented out, so each stack uses **local** state
+stored in its `.terragrunt-cache/…/terraform.tfstate`. **`rm -rf .terragrunt-cache` deletes the
+state** and orphans live cluster resources → next apply fails with `… already exists`. Recover by
+importing the orphans back into state, e.g.:
+
+```bash
+terragrunt run -- import 'kubernetes_service_account.sa["traefik"]' kube-system/traefik
+terragrunt run -- import 'kubernetes_cluster_role.manager["traefik"]' traefik-manager
+```
+
+Consider wiring a real remote backend so cache clears are safe.
+
 ## See also
 
 - [`devops-terraform-modules/`](../devops-terraform-modules/) — the modules consumed here.

@@ -5,10 +5,8 @@ locals {
   org_config_vars = read_terragrunt_config(find_in_parent_folders("org.hcl"))
   org_name        = local.org_config_vars.locals.infras_organization
 
-  # vault_config_vars       = read_terragrunt_config(find_in_parent_folders("vault-config.hcl"))
-  # vault_address           = local.vault_config_vars.locals.address
-  # vault_token             = local.vault_config_vars.locals.token
-  # vault_token_secret_name = "vault-token"
+  vault_config_vars = read_terragrunt_config(find_in_parent_folders("vault-config.hcl"))
+  vault_address     = local.vault_config_vars.locals.vault_address
 
   # secret_store_name = "vault-backend"
   # secrets          = local.environment_vars.locals.secrets
@@ -21,6 +19,27 @@ terraform {
 
 include {
   path = find_in_parent_folders("root.hcl")
+}
+
+include "vault" {
+  path = find_in_parent_folders("vault-config.hcl")
+}
+
+
+dependency "vault-auth" {
+  config_path = "../vault-auth"
+  mock_outputs = {
+    roles = {
+      external-secrets = {
+        role_id      = "mock",
+        secret_id    = "mock",
+        client_token = "mock"
+      }
+    }
+  }
+
+  mock_outputs_allowed_terraform_commands = ["validate", "plan"]
+  mock_outputs_merge_strategy_with_state  = "shallow"
 }
 
 # ArgoCD reads GitHub/ArgoCD creds from vault-secrets and the ESO SecretStore name from
@@ -36,18 +55,28 @@ dependency "vault-secrets" {
       "argocd/creds"  = { password = "MOCK" }
     }
   }
-  mock_outputs_merge_strategy_with_state = "shallow"
+
+  mock_outputs_allowed_terraform_commands = ["validate", "plan"]
+  mock_outputs_merge_strategy_with_state  = "shallow"
 }
 
-dependency "external-secrets" {
-  config_path = "../external-secrets"
-  mock_outputs = {
-    gitops_backend_name = "gitops-backend"
-  }
-  mock_outputs_merge_strategy_with_state = "shallow"
-}
+# dependency "external-secrets" {
+#   config_path = "../external-secrets"
+#   mock_outputs = {
+#     gitops_backend_name = "gitops-backend"
+#   }
+#   mock_outputs_merge_strategy_with_state = "shallow"
+# }
 
 inputs = {
+  # vault_config = {
+  #   vault_address       = local.vault_config_vars.locals.vault_address
+  #   approle_path        = "approle"                # auth mount (vault_auth_backend.main default path)
+  #   role_id             = local.eso_role.role_id   # public
+  #   secret_id           = local.eso_role.secret_id # credential
+  #   approle_secret_name = "vault-approle"
+  #   # vault_token / vault_token_secret_name — DELETE, no longer used
+  # }
   # CoreDNS is managed by k3s itself (rancher/mirrored-coredns-coredns:1.11.3); the lab no
   # longer disables it. The terraform core-dns module is commented out in addons.tf, so this
   # input is disabled too. Re-enable both (with a multi-arch image) only if you re-add
@@ -91,17 +120,10 @@ inputs = {
 
     common = {}
 
-    # Traefik's OWN route: the dashboard (api@internal isn't a k8s Service → IngressRoute, not
-    # HTTPRoute). Reachable at http://traefik.k3s.local once mapped in /etc/hosts.
-    routing = {
-      dashboard_routes = [
-        {
-          name      = "traefik-dashboard"
-          namespace = "traefik"
-          host      = "traefik.k3s.local"
-        },
-      ]
-    }
+    # Traefik dashboard is now exposed by the CHART's built-in IngressRoute
+    # (ingressRoute.dashboard.enabled in charts/traefik/values.yml.tftpl → host traefik.k3s.<env>),
+    # so no routing entry is needed here. Add a `routing` block with httproutes /
+    # backend_tls_policies if this controller needs Gateway-API routes later.
   }
 
   # Routing controller for Gateway API routes (future services). Per-app routes live in each
@@ -191,8 +213,14 @@ inputs = {
     # Names for the chart's ExternalSecrets (applied after the release; reconcile once the gitops
     # SecretStore exists). store_name = the ESO SecretStore in the gitops ns (external-secrets stack).
     secret = {
-      store_name                = dependency.external-secrets.outputs.gitops_backend_name
-      argocd_secret_name        = "argocd-ex-secret"
+      vault_address       = local.vault_address
+      approle_path        = "approle"                                                         # auth mount (vault_auth_backend.main default path)
+      role_id             = dependency.vault-auth.outputs.roles["external-secrets"].role_id   # public
+      secret_id           = dependency.vault-auth.outputs.roles["external-secrets"].secret_id # credential
+      approle_secret_name = "argocd-approle"
+      argocd_secret_name  = "argocd-ex-secret"
+
+      store_name                = "argocd-store-backend"
       docker_config_secret_name = "docker-ex-configjson"
       docker_token_secret_name  = "docker-ex-token"
       github_secret_name        = "github-ex-ssh-priv-key"
@@ -209,21 +237,21 @@ inputs = {
     }
 
     # UI/API via Gateway API HTTPRoute on the shared traefik-gateway `web` listener. HTTPRoute
-    # lives in `gitops` (same ns as the backend Service → no ReferenceGrant); parentRef crosses
-    # into `traefik` (allowed, listener is from:All). backend_name = the argocd-server Service:
-    # VERIFY with `kubectl get svc -n gitops` after install (chart fullname logic → expected
-    # `argo-cd-server`; adjust here if the chart names it `argo-cd-argocd-server`).
+    # lives in `argocd` (same ns as the backend Service → no ReferenceGrant); parentRef crosses
+    # into `traefik` (allowed, listener is from:All). backend_name = the argocd-server Service.
+    # CONFIRMED via `kubectl get svc -n argocd`: chart names it `<release>-argocd-server` →
+    # release `argo-cd` yields `argo-cd-argocd-server` (Service port http:80).
     routing = {
       httproutes = [
         {
           name              = "argocd"
-          namespace         = "gitops"
+          namespace         = "argocd"
           gateway_name      = "traefik-gateway"
           gateway_namespace = "traefik"
           section_name      = "web"
           hostnames         = ["argocd.k3s.${local.environment}"]
           path_prefix       = "/"
-          backend_name      = "argo-cd-server"
+          backend_name      = "argo-cd-argocd-server"
           backend_port      = 80
         }
       ]
