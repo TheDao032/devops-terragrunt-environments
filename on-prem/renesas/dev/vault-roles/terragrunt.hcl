@@ -4,8 +4,8 @@ locals {
 }
 
 terraform {
-  # source = "../../../../../devops-terraform-modules//on-prem/shared/vault-auth"
-  source = "../../../../../devops-terraform-modules//on-prem/shared/vault-auth"
+  # source = "../../../../../devops-terraform-modules//on-prem/shared/vault-auths"
+  source = "../../../../../devops-terraform-modules//on-prem/shared/vault-auths"
 }
 
 # dependency "vault-secrets" {

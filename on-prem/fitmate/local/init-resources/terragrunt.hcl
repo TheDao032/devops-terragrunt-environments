@@ -6,14 +6,21 @@ locals {
   org_name        = local.org_config_vars.locals.infras_organization
 
   vault_config_vars = read_terragrunt_config(find_in_parent_folders("vault.hcl"))
-  vault_address     = local.vault_config_vars.locals.vault_address
+  vault_address     = local.vault_config_vars.locals.vault_address # host-side (vault.k3s.local) — NOT resolvable from inside the cluster
+
+  # In-cluster Vault address for the ESO SecretStore. External Secrets runs as a POD, so it must use
+  # cluster DNS (CoreDNS), NOT the host-only `vault.k3s.local` ingress hostname (pods can't resolve
+  # it → "no such host" → InvalidProviderConfig). vault-active = the unsealed active node; HTTPS on
+  # 8200. The ESO controller runs with VAULT_SKIP_VERIFY=true, so the cert-manager private CA needs
+  # no caBundle here (lab); for prod, add caProvider → the vault-tls-ca secret instead.
+  vault_incluster_address = "https://vault-active.vault.svc.cluster.local:8200"
 
   # secret_store_name = "vault-backend"
   # secrets          = local.environment_vars.locals.secrets
 }
 
 terraform {
-  source = "../../../../../devops-terraform-modules//on-prem/${local.org_name}/k3s-resources"
+  source = "../../../../../devops-terraform-modules//on-prem/${local.org_name}/init-resources"
   # source = "git::git@github.com:TheDao032/devops-terraform-modules.git//on-prem/${local.org_name}/k3s-resources?ref=${local.environment}"
 }
 
@@ -25,58 +32,7 @@ include "vault" {
   path = find_in_parent_folders("vault.hcl")
 }
 
-
-dependency "vault-auth" {
-  config_path = "../vault-auth"
-  mock_outputs = {
-    roles = {
-      external-secrets = {
-        role_id      = "mock",
-        secret_id    = "mock",
-        client_token = "mock"
-      }
-    }
-  }
-
-  # mock_outputs_allowed_terraform_commands = ["validate", "plan"]
-  mock_outputs_merge_strategy_with_state = "shallow"
-}
-
-# ArgoCD reads GitHub/ArgoCD creds from vault-secrets and the ESO SecretStore name from
-# external-secrets. mock_outputs let the FIRST bring-up pass plan (ArgoCD off) before those
-# stacks exist; the SECOND pass (ArgoCD on) uses their real, applied outputs. Apply order:
-#   k3s-resources (argocd_conf absent) → vault-secrets → external-secrets → k3s-resources (this).
-dependency "vault-secrets" {
-  config_path = "../vault-secrets"
-  mock_outputs = {
-    secrets = {
-      "github/params" = { url = "https://github.com/MOCK", gitops_repo = "gitops-apps" }
-      "github/creds"  = { ssh_priv_key = "MOCK" }
-      "argocd/creds"  = { password = "MOCK" }
-    }
-  }
-
-  # mock_outputs_allowed_terraform_commands = ["validate", "plan"]
-  mock_outputs_merge_strategy_with_state = "shallow"
-}
-
-# dependency "external-secrets" {
-#   config_path = "../external-secrets"
-#   mock_outputs = {
-#     gitops_backend_name = "gitops-backend"
-#   }
-#   mock_outputs_merge_strategy_with_state = "shallow"
-# }
-
 inputs = {
-  # vault_config = {
-  #   vault_address       = local.vault_config_vars.locals.vault_address
-  #   approle_path        = "approle"                # auth mount (vault_auth_backend.main default path)
-  #   role_id             = local.eso_role.role_id   # public
-  #   secret_id           = local.eso_role.secret_id # credential
-  #   approle_secret_name = "vault-approle"
-  #   # vault_token / vault_token_secret_name — DELETE, no longer used
-  # }
   # CoreDNS is managed by k3s itself (rancher/mirrored-coredns-coredns:1.11.3); the lab no
   # longer disables it. The terraform core-dns module is commented out in addons.tf, so this
   # input is disabled too. Re-enable both (with a multi-arch image) only if you re-add
@@ -194,74 +150,91 @@ inputs = {
   # ArgoCD (core). Present ⇒ addons.tf enables the argocd + argocd-routing modules (see the
   # two-pass note there). Reads live creds/store name from the vault-secrets + external-secrets
   # dependency blocks below (mocked so the first bring-up pass still plans while ArgoCD is off).
-  argocd_conf = {
+  # argocd_conf = {
+  #   helm = {
+  #     # Latest argo-helm chart (2026-07-09). NOTE: 3-major jump from the old 7.8.10 scaffold —
+  #     # our values only touch stable keys (server.insecure, credentialTemplates, repositories),
+  #     # but skim the 8.0.0 / 9.0.0 / 10.0.0 breaking-change notes before the prod tenants adopt it.
+  #     chart_version = "10.1.3"
+  #     namespace     = "argocd"
+  #     repository    = "https://argoproj.github.io/argo-helm"
+  #     release_name  = "argo-cd"
+  #   }
+  #
+  #   # Only `domain` is consumed (values.yml.tftpl global.domain). Routing is Gateway API below.
+  #   ingress = {
+  #     domain = "argocd.k3s.${local.environment}"
+  #   }
+  #
+  #   # Names for the chart's ExternalSecrets (applied after the release; reconcile once the gitops
+  #   # SecretStore exists). store_name = the ESO SecretStore in the gitops ns (external-secrets stack).
+  #   secret = {
+  #     vault_address       = local.vault_incluster_address                                     # in-cluster (ESO pod) — NOT vault.k3s.local
+  #     approle_path        = "approle"                                                         # auth mount (vault_auth_backend.main default path)
+  #     role_id             = dependency.vault-auths.outputs.roles["external-secrets"].role_id   # public
+  #     secret_id           = dependency.vault-auths.outputs.roles["external-secrets"].secret_id # credential
+  #     approle_secret_name = "argocd-approle"
+  #     argocd_secret_name  = "argocd-ex-secret"
+  #
+  #     store_name                = "argocd-store-backend"
+  #     docker_config_secret_name = "docker-ex-configjson"
+  #     docker_token_secret_name  = "docker-ex-token"
+  #     github_secret_name        = "github-ex-ssh-priv-key"
+  #   }
+  #
+  #   github = {
+  #     url          = dependency.vault-secrets.outputs.secrets["github/params"]["url"]
+  #     gitops_repo  = dependency.vault-secrets.outputs.secrets["github/params"]["gitops_repo"]
+  #     ssh_priv_key = dependency.vault-secrets.outputs.secrets["github/creds"]["ssh_priv_key"]
+  #   }
+  #
+  #   common = {
+  #     admin_password = dependency.vault-secrets.outputs.secrets["argocd/creds"]["password"]
+  #   }
+  #
+  #   # UI/API via Gateway API HTTPRoute on the shared traefik-gateway `web` listener. HTTPRoute
+  #   # lives in `argocd` (same ns as the backend Service → no ReferenceGrant); parentRef crosses
+  #   # into `traefik` (allowed, listener is from:All). backend_name = the argocd-server Service.
+  #   # CONFIRMED via `kubectl get svc -n argocd`: chart names it `<release>-argocd-server` →
+  #   # release `argo-cd` yields `argo-cd-argocd-server` (Service port http:80).
+  #   routing = {
+  #     httproutes = [
+  #       {
+  #         name              = "argocd"
+  #         namespace         = "argocd"
+  #         gateway_name      = "traefik-gateway"
+  #         gateway_namespace = "traefik"
+  #         section_name      = "web"
+  #         hostnames         = ["argocd.k3s.${local.environment}"]
+  #         path_prefix       = "/"
+  #         backend_name      = "argo-cd-argocd-server"
+  #         backend_port      = 80
+  #       }
+  #     ]
+  #   }
+  # }
+
+  reloader_conf = {
     helm = {
-      # Latest argo-helm chart (2026-07-09). NOTE: 3-major jump from the old 7.8.10 scaffold —
-      # our values only touch stable keys (server.insecure, credentialTemplates, repositories),
-      # but skim the 8.0.0 / 9.0.0 / 10.0.0 breaking-change notes before the prod tenants adopt it.
-      chart_version = "10.1.3"
-      namespace     = "argocd"
-      repository    = "https://argoproj.github.io/argo-helm"
-      release_name  = "argo-cd"
-    }
-
-    # Only `domain` is consumed (values.yml.tftpl global.domain). Routing is Gateway API below.
-    ingress = {
-      domain = "argocd.k3s.${local.environment}"
-    }
-
-    # Names for the chart's ExternalSecrets (applied after the release; reconcile once the gitops
-    # SecretStore exists). store_name = the ESO SecretStore in the gitops ns (external-secrets stack).
-    secret = {
-      vault_address       = local.vault_address
-      approle_path        = "approle"                                                         # auth mount (vault_auth_backend.main default path)
-      role_id             = dependency.vault-auth.outputs.roles["external-secrets"].role_id   # public
-      secret_id           = dependency.vault-auth.outputs.roles["external-secrets"].secret_id # credential
-      approle_secret_name = "argocd-approle"
-      argocd_secret_name  = "argocd-ex-secret"
-
-      store_name                = "argocd-store-backend"
-      docker_config_secret_name = "docker-ex-configjson"
-      docker_token_secret_name  = "docker-ex-token"
-      github_secret_name        = "github-ex-ssh-priv-key"
-    }
-
-    github = {
-      url          = dependency.vault-secrets.outputs.secrets["github/params"]["url"]
-      gitops_repo  = dependency.vault-secrets.outputs.secrets["github/params"]["gitops_repo"]
-      ssh_priv_key = dependency.vault-secrets.outputs.secrets["github/creds"]["ssh_priv_key"]
+      chart_version = "2.2.14"
+      namespace     = "kube-system"
+      repository    = "https://stakater.github.io/stakater-charts"
+      release_name  = "reloader"
     }
 
     common = {
-      admin_password = dependency.vault-secrets.outputs.secrets["argocd/creds"]["password"]
-    }
-
-    # UI/API via Gateway API HTTPRoute on the shared traefik-gateway `web` listener. HTTPRoute
-    # lives in `argocd` (same ns as the backend Service → no ReferenceGrant); parentRef crosses
-    # into `traefik` (allowed, listener is from:All). backend_name = the argocd-server Service.
-    # CONFIRMED via `kubectl get svc -n argocd`: chart names it `<release>-argocd-server` →
-    # release `argo-cd` yields `argo-cd-argocd-server` (Service port http:80).
-    routing = {
-      httproutes = [
-        {
-          name              = "argocd"
-          namespace         = "argocd"
-          gateway_name      = "traefik-gateway"
-          gateway_namespace = "traefik"
-          section_name      = "web"
-          hostnames         = ["argocd.k3s.${local.environment}"]
-          path_prefix       = "/"
-          backend_name      = "argo-cd-argocd-server"
-          backend_port      = 80
-        }
-      ]
+      rq_mem       = "128Mi"
+      rq_cpu       = "10m"
+      limits_mem   = "512Mi"
+      limits_cpu   = "100m"
+      storage_size = "10Gi"
     }
   }
-  #
+
   # argocd_img_upd_conf = {
   #   helm = {
-  #     chart_version = "0.12.0"
-  #     namespace     = "gitops"
+  #     chart_version = "1.2.4"
+  #     namespace     = "argocd"
   #     repository    = "https://argoproj.github.io/argo-helm"
   #     release_name  = "argocd-image-updater"
   #   }
@@ -273,23 +246,6 @@ inputs = {
   #
   #   common = {
   #     admin_password = dependency.vault-secrets.outputs.secrets["argocd/creds"]["password"]
-  #   }
-  # }
-  #
-  # reloader_conf = {
-  #   helm = {
-  #     chart_version = "2.0.0"
-  #     namespace     = "kube-system"
-  #     repository    = "https://stakater.github.io/stakater-charts"
-  #     release_name  = "reloader"
-  #   }
-  #
-  #   common = {
-  #     rq_mem       = "128Mi"
-  #     rq_cpu       = "10m"
-  #     limits_mem   = "512Mi"
-  #     limits_cpu   = "100m"
-  #     storage_size = "10Gi"
   #   }
   # }
   #
@@ -329,51 +285,6 @@ inputs = {
   #   }
   # }
   #
-  # vault_conf = {
-  #   helm = {
-  #     chart_version = "0.28.1"
-  #     namespace     = "vault"
-  #     repository    = "https://helm.releases.hashicorp.com"
-  #     release_name  = "vault"
-  #   }
-  #
-  #   server = {
-  #     rq_mem     = "512Mi"
-  #     rq_cpu     = "250m"
-  #     limits_mem = "1Gi"
-  #     limits_cpu = "500m"
-  #
-  #     datastore_size       = "10Gi"
-  #     datastore_mount_path = "/vault/datastore"
-  #
-  #     auditstore_size       = "10Gi"
-  #     auditstore_mount_path = "/vault/auditstore"
-  #   }
-  #
-  #   ui = {
-  #     enabled = true
-  #   }
-  #
-  #   injector = {
-  #     rq_mem     = "256Mi"
-  #     rq_cpu     = "250m"
-  #     limits_mem = "512Mi"
-  #     limits_cpu = "500m"
-  #   }
-  #
-  #   common = {
-  #     consul_server_url = "consul-server:8500"
-  #     sc_name           = "vault-sc"
-  #
-  #     external_vault_addr   = "vault-server:8200"
-  #     vault_server_url      = get_env("VAULT_ADDR", "")
-  #     vault_server_token    = get_env("VAULT_TOKEN", "")
-  #     vault_tls_server_name = "vault-tls-server"
-  #     vault_tls_ca_name     = "vault-tls-ca"
-  #     host                  = "vault.k3s.local"
-  #     rootpath              = "/"
-  #   }
-  # }
 
   # nginx_gateway_fabric_conf = {
   #   helm = {

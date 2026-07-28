@@ -12,6 +12,17 @@ include "root" {
   path = find_in_parent_folders("root.hcl")
 }
 
+dependency "init-resources" {
+  config_path = "../init-resources"
+
+  mock_outputs = {
+    init-resources_output = "mock-init-resources-output"
+  }
+
+  # mock_outputs_allowed_terraform_commands = ["validate", "plan"]
+  mock_outputs_merge_strategy_with_state = "shallow"
+}
+
 inputs = {
   # Overrides variables from env.hcl
   rbacs = {

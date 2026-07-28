@@ -142,7 +142,7 @@ State locking is now automatic (HCP locks the workspace during a run).
 Repeat Steps 2–5 for each stack. Suggested order (deps first):
 
 ```
-vault-auth → vault-secrets → service-accounts → external-secrets → k3s-resources → gitops-apps
+vault-auths → vault-secrets → service-accounts → external-secrets → k3s-resources → gitops-apps
 ```
 
 Each gets its own workspace automatically (per-stack naming), so they never collide.

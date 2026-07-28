@@ -190,7 +190,7 @@ If you export the base64 into the bare `KUBE_*` names, the provider **reads the 
 and overrides the inline `base64decode(...)`** → `'client_certificate' is not a valid PEM encoded
 certificate`. This only bites stacks that actually create `kubernetes_*` resources (e.g.
 `service-accounts`) — `helm`/`kubectl`-only stacks (`k3s-resources`) and `vault`-only stacks
-(`vault-auth`, `vault-secrets`) never configure the kubernetes provider, so they silently work.
+(`vault-auths`, `vault-secrets`) never configure the kubernetes provider, so they silently work.
 
 - **Local dev** → the repo `.envrc` exports **`TG_KUBE_*`** (prefix hides them from the provider);
   `on-prem/fitmate/kube-config.hcl` reads `get_env("TG_KUBE_*")`. Use `kubectl config view --minify`
