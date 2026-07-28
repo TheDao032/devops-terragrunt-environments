@@ -15,6 +15,10 @@ locals {
   # no caBundle here (lab); for prod, add caProvider → the vault-tls-ca secret instead.
   vault_incluster_address = "https://vault-active.vault.svc.cluster.local:8200"
 
+  # Keycloak connects to the EXTERNAL Citus Postgres coordinator DIRECT (:5432, NOT pgbouncer —
+  # its schema migrations take advisory locks that transaction pooling breaks).
+  pg_host = get_env("PG_HOST", "192.168.105.10")
+
   # secret_store_name = "vault-backend"
   # secrets          = local.environment_vars.locals.secrets
 }
@@ -69,9 +73,10 @@ dependency "vault-secrets" {
   config_path = "../vault-secrets"
   mock_outputs = {
     secrets = {
-      "github/params" = { url = "https://github.com/MOCK", gitops_repo = "gitops-apps" }
-      "github/creds"  = { ssh_priv_key = "MOCK" }
-      "argocd/creds"  = { password = "MOCK" }
+      "github/params"               = { url = "https://github.com/MOCK", gitops_repo = "gitops-apps" }
+      "github/creds"                = { ssh_priv_key = "MOCK" }
+      "argocd/creds"                = { password = "MOCK" }
+      "database/keycloak/app/creds" = { username = "keycloak_app", password = "MOCK" }
     }
   }
 
@@ -88,6 +93,40 @@ dependency "vault-secrets" {
 # }
 
 inputs = {
+  # Keycloak (operator). Present ⇒ addons.tf enables the keycloak + keycloak-routing modules.
+  # DB = EXTERNAL Citus Postgres, coordinator DIRECT :5432 (db `keycloak`, role keycloak_app from
+  # Vault via vault-secrets). Routing = Gateway API HTTPRoute on the traefik-gateway `web` listener
+  # → the operator's keycloak-service :8080. CRDs come from init-resources; apply that stack first.
+  keycloak_conf = {
+    keycloak = {
+      hostname  = "keycloak.k3s.${local.environment}"
+      namespace = "keycloak"
+      instances = 1
+    }
+    db = {
+      host     = local.pg_host
+      port     = 5432
+      database = "keycloak"
+      username = dependency.vault-secrets.outputs.secrets["database/keycloak/app/creds"]["username"]
+      password = dependency.vault-secrets.outputs.secrets["database/keycloak/app/creds"]["password"]
+    }
+    routing = {
+      httproutes = [
+        {
+          name              = "keycloak"
+          namespace         = "keycloak"
+          gateway_name      = "traefik-gateway"
+          gateway_namespace = "traefik"
+          section_name      = "web"
+          hostnames         = ["keycloak.k3s.${local.environment}"]
+          path_prefix       = "/"
+          backend_name      = "keycloak-service"
+          backend_port      = 8080
+        }
+      ]
+    }
+  }
+
   # ArgoCD (core). Present ⇒ addons.tf enables the argocd + argocd-routing modules (see the
   # two-pass note there). Reads live creds/store name from the vault-secrets + external-secrets
   # dependency blocks below (mocked so the first bring-up pass still plans while ArgoCD is off).
