@@ -44,7 +44,7 @@ terraform {
 # ($${...} escapes to a literal ${...} for the shell; run_cmd result is cached across units.)
 exclude {
   if = run_cmd("--terragrunt-quiet", "bash", "-c",
-    "curl -fs -o /dev/null --max-time 3 $${VAULT_ADDR:-http://vault.k3s.local}/v1/sys/health && echo false || echo true"
+    "curl -fs -o /dev/null --max-time 3 $${VAULT_ADDR:-http://vault.k3s.dev}/v1/sys/health && echo false || echo true"
   ) == "true"
   actions = ["all"]
 }

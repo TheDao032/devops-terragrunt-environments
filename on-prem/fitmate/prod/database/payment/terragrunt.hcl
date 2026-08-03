@@ -12,7 +12,7 @@ terraform {
 
 exclude {
   if = run_cmd("--terragrunt-quiet", "bash", "-c",
-    "curl -fs -o /dev/null --max-time 3 $${VAULT_ADDR:-http://vault.k3s.local}/v1/sys/health && echo false || echo true"
+    "curl -fs -o /dev/null --max-time 3 $${VAULT_ADDR:-http://vault.k3s.prod}/v1/sys/health && echo false || echo true"
   ) == "true"
   actions = ["all"]
 }
@@ -22,8 +22,7 @@ dependency "vault-secrets" {
   mock_outputs = {
     secrets = {
       "database/superuser/creds"   = { username = "tf_admin", password = "MOCK" }
-      "database/trainer/app/creds" = { username = "trainer_app", password = "MOCK" }
-      "database/trainer/ro/creds"  = { username = "trainer_ro", password = "MOCK" }
+      "database/payment/app/creds" = { username = "payment_app", password = "MOCK" }
     }
   }
   mock_outputs_merge_strategy_with_state = "shallow"
@@ -46,25 +45,25 @@ inputs = {
   ssh_user = get_env("PG_SSH_USER", "packer")
   ssh_opts = get_env("PG_SSH_OPTS", "-i ~/.ssh/lab_ed25519 -o StrictHostKeyChecking=accept-new -o BatchMode=yes")
 
-  # trainer-service — Trainers, verification, availability, reviews summary (data-model.md).
+  # payment-service — Escrow, audit log, wallets, withdrawals, gateway webhook events (data-model.md).
+  # Constitutional tables: escrow_audit_log (§I), webhook_events (§IX) → `audit` schema.
+  # ⚠️ WRITE-ONLY today: payment config/prod is DATABASE_WRITE_DB_CONNECTION_STRING only (gateway
+  # integration unbuilt). So a single app (RW) role, NO read-only role yet. Add payment_ro + a
+  # SELECT grant when a read consumer exists.
   services = {
-    trainer = {
+    payment = {
       database = {
-        name       = "trainer"
-        owner      = "trainer_app"
+        name       = "payment"
+        owner      = "payment_app"
         extensions = ["uuid-ossp"]
-        schemas    = ["app"]
-        # NO seed sql — owned by database/migrations/trainer/ (constitution §V).
+        schemas    = ["app", "audit"]
+        # NO seed sql — owned by database/migrations/payment/ (constitution §V).
         pgbouncer = { register = false }
       }
       roles = {
-        trainer_app = { login = true, password = dependency.vault-secrets.outputs.secrets["database/trainer/app/creds"]["password"] }
-        trainer_ro  = { login = true, password = dependency.vault-secrets.outputs.secrets["database/trainer/ro/creds"]["password"] }
+        payment_app = { login = true, password = dependency.vault-secrets.outputs.secrets["database/payment/app/creds"]["password"] }
       }
-      grants = [
-        { role = "trainer_ro", schema = "app", object_type = "schema", privileges = ["USAGE"] },
-        { role = "trainer_ro", schema = "app", object_type = "table", privileges = ["SELECT"], on_future = true, owner = "trainer_app" },
-      ]
+      grants = []
     }
   }
 }

@@ -14,7 +14,7 @@ terraform {
 # same as the other units). Runtime prereqs (coordinator reachable + SSH) are not gated here.
 exclude {
   if = run_cmd("--terragrunt-quiet", "bash", "-c",
-    "curl -fs -o /dev/null --max-time 3 $${VAULT_ADDR:-http://vault.k3s.local}/v1/sys/health && echo false || echo true"
+    "curl -fs -o /dev/null --max-time 3 $${VAULT_ADDR:-http://vault.k3s.prod}/v1/sys/health && echo false || echo true"
   ) == "true"
   actions = ["all"]
 }
@@ -49,11 +49,15 @@ inputs = {
   ssh_opts = get_env("PG_SSH_OPTS", "-i ~/.ssh/lab_ed25519 -o StrictHostKeyChecking=accept-new -o BatchMode=yes")
 
   # trainee-service — Trainees, preferences, FitPoints balance (data-model.md).
+  # SHARED-PLATFORM PROD (2026-08-02, [[production-cloudflare-tunnel]] Phase 1): prod-SUFFIXED db + roles
+  # so prod does NOT collide with / co-mingle local's `trainee` db on the SAME Postgres (192.168.105.10).
+  # db=trainee_prod, roles=trainee_prod_app/ro. Vault password paths stay prod-isolated by folder
+  # (fitmate/data/prod/database/trainee/...). The service key stays `trainee` (logical name).
   services = {
     trainee = {
       database = {
-        name       = "trainee"
-        owner      = "trainee_app"
+        name       = "trainee_prod"
+        owner      = "trainee_prod_app"
         extensions = ["uuid-ossp"] # plain Postgres db (not Citus-sharded); add "citus" + per-db node registration to shard
         schemas    = ["app"]
         # NO seed sql — tables are owned by the service's migrations (database/migrations/trainee/),
@@ -61,13 +65,13 @@ inputs = {
         pgbouncer = { register = false }
       }
       roles = {
-        trainee_app = { login = true, password = dependency.vault-secrets.outputs.secrets["database/trainee/app/creds"]["password"] }
-        trainee_ro  = { login = true, password = dependency.vault-secrets.outputs.secrets["database/trainee/ro/creds"]["password"] }
+        trainee_prod_app = { login = true, password = dependency.vault-secrets.outputs.secrets["database/trainee/app/creds"]["password"] }
+        trainee_prod_ro  = { login = true, password = dependency.vault-secrets.outputs.secrets["database/trainee/ro/creds"]["password"] }
       }
       grants = [
-        { role = "trainee_ro", schema = "app", object_type = "schema", privileges = ["USAGE"] },
-        # SELECT on FUTURE tables trainee_app creates (i.e. migration tables) — default privilege.
-        { role = "trainee_ro", schema = "app", object_type = "table", privileges = ["SELECT"], on_future = true, owner = "trainee_app" },
+        { role = "trainee_prod_ro", schema = "app", object_type = "schema", privileges = ["USAGE"] },
+        # SELECT on FUTURE tables trainee_prod_app creates (i.e. migration tables) — default privilege.
+        { role = "trainee_prod_ro", schema = "app", object_type = "table", privileges = ["SELECT"], on_future = true, owner = "trainee_prod_app" },
       ]
     }
   }

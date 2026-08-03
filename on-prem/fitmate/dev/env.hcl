@@ -22,8 +22,8 @@ locals {
   org_vars       = read_terragrunt_config(find_in_parent_folders("org.hcl"))
   org_infras_org = local.org_vars.locals.infras_organization
 
-  environment  = "local"
-  cluster_name = "local"
+  environment  = "dev"
+  cluster_name = "dev"
 
   secrets = {
     "artifactory/params" = {
@@ -124,11 +124,11 @@ locals {
     # ESO syncs each fitmate/local/<svc>/params into a <svc>-keycloak Secret the service reads.
     # Env-var names verified against fitmate-trainee-service KeycloakConfig + the go toolkit keycloak.go.
     #   ISSUER  : the BROWSER-facing host — MUST equal the token `iss` (Keycloak CR hostname is pinned here).
-    #   JWKSURL : the IN-CLUSTER Service URL — pods can't resolve keycloak.k3s.local; jwksURL() uses this
+    #   JWKSURL : the IN-CLUSTER Service URL — pods can't resolve keycloak.k3s.dev; jwksURL() uses this
     #             explicit value when set (else derives <issuer>/…/certs). This is the issuer/JWKS split.
     # MVP: only trainee-service is migrated; trainer/booking/payment/admin/inquiry fan out in Phase 2.
     "trainee/params" = {
-      KEYCLOAK_ISSUER   = "http://keycloak.k3s.local/realms/fitmate"
+      KEYCLOAK_ISSUER   = "http://keycloak.k3s.dev/realms/fitmate"
       KEYCLOAK_AUDIENCE = "fitmate-backend"
       KEYCLOAK_JWKSURL  = "http://keycloak-service.keycloak.svc.cluster.local:8080/realms/fitmate/protocol/openid-connect/certs"
     }

@@ -59,6 +59,14 @@ generate "versions" {
           source = "hashicorp/vault"
           version = "~> 4.4.0"
         }
+        postgresql = {
+          source  = "cyrilgdn/postgresql"
+          version = "~> 1.22"
+        }
+        keycloak = {
+          source  = "keycloak/keycloak"
+          version = "~> 5.8"
+        }
       }
     }
 EOF

@@ -8,15 +8,6 @@ terraform {
   # source = "git::git@github.com:TheDao032/devops-terraform-modules.git//on-prem/shared/service-accounts?ref=${local.environment}"
 }
 
-# SHARED-PLATFORM PROD (2026-08-02, [[production-cloudflare-tunnel]] Phase 1): this unit creates
-# CLUSTER-WIDE Traefik RBAC (traefik-manager + middlewares in kube-system) — already deployed by
-# LOCAL. Prod reuses it, so ALWAYS excluded (re-creating cluster-scoped RBAC collides with local).
-# Per-app prod ServiceAccounts come from FitMate's app charts (ADR-036), not here.
-exclude {
-  if      = true
-  actions = ["all"]
-}
-
 include "root" {
   path = find_in_parent_folders("root.hcl")
 }

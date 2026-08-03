@@ -1,143 +1,193 @@
 # Set common variables for the region. This is automatically pulled in in the root terragrunt.hcl configuration to
 # configure the remote state bucket and pass forward to the child modules as inputs.
 locals {
-  vault_config_vars = read_terragrunt_config(find_in_parent_folders("vault.hcl"))
-  vault_address     = local.vault_config_vars.locals.address
-  vault_token       = local.vault_config_vars.locals.token
+  # vault_config_vars = read_terragrunt_config(find_in_parent_folders("vault.hcl"))
+  # vault_address     = local.vault_config_vars.locals.address
+  # vault_token       = local.vault_config_vars.locals.token
 
-  environment        = "dev"
-  cluster_name       = "cluster.local"
-  external_server_ip = get_env("K3S_SERVER_1")
+  backend_vars            = read_terragrunt_config(find_in_parent_folders("backend.hcl"))
+  backend_docker_registry = local.backend_vars.locals.docker_registry
+  backend_docker_username = local.backend_vars.locals.docker_username
+  backend_docker_token    = local.backend_vars.locals.docker_token
+  backend_docker_email    = local.backend_vars.locals.docker_email
 
-  k3s = {
-    "k3s/params" = {
-      server-1                = get_env("K3S_SERVER_1")
-      server-2                = get_env("K3S_SERVER_2")
-      agent-1                 = get_env("K3S_AGENT_1")
-      agent-2                 = get_env("K3S_AGENT_2")
-      api_endpoint            = get_env("K3S_SERVER_1")
-      keepalived_virtual_ip   = get_env("KEEPALIVED_VIRTUAL_IP")
-      keepalived_nw_interface = get_env("KEEPALIVED_NW_INTERFACE")
-      load_balancer_port      = get_env("LOAD_BALANCER_PORT")
-      psql_version            = get_env("PSQL_VERSION")
-      k3s_server_cidr_range   = get_env("K3S_SERVER_CIDR_RANGE")
-      k3s_version             = get_env("K3S_VERSION")
-      extra_server_args       = ""
-      extra_agent_args        = ""
-    }
-  }
+  backend_gitops_url   = local.backend_vars.locals.gitops_url
+  backend_ssh_priv_key = local.backend_vars.locals.ssh_private_key
 
-  query_service = {
-    "query_service/params" = {
-      query_service_port                = get_env("QUERY_SERVICE_PORT")
-      query_service_name                = get_env("QUERY_SERVICE_NAME")
-      query_service_time_interval       = get_env("QUERY_SERVICE_TIME_INTERVAL")
-      query_service_opn_legacy_org      = get_env("QUERY_SERVICE_OPN_LEGACY_ORG")
-      query_service_material_legacy_org = get_env("QUERY_SERVICE_MATERIAL_LEGACY_ORG")
-      java_ops_xms                      = get_env("JAVA_OPS_XMS")
-    }
-    "query_service/creds" = {
-    }
-  }
+  backend_github_token    = local.backend_vars.locals.github_token
+  backend_github_username = local.backend_vars.locals.github_username
 
-  ldap = {
-    "ldap/params" = {
-      ldap_server_url = get_env("LDAP_SERVER_URL", "http://192.168.1.146:389")
-    }
-    "ldap/creds" = {
-      ldap_provider_bind_credential     = get_env("LDAP_PROVIDER_BIND_CREDENTIAL", "admin_pass")
-      ldap_provider_bind_dn             = get_env("LDAP_PROVIDER_BIND_DN", "cn=admin,dc=nthedao,dc=info")
-      ldap_provider_users_dn            = get_env("LDAP_PROVIDER_USERS_DN", "cn=dev,ou=users,dc=nthedao,dc=info")
-      ldap_provider_user_object_classes = get_env("LDAP_PROVIDER_USER_OBJECT_CLASSES", "inetOrgPerson,posixAccount,top,organizationalPerson,person")
-    }
-  }
+  backend_artifactory_registry = local.backend_vars.locals.artifactory_registry
 
-  keycloak = {
-    "keycloak/params" = {
-    }
-    "keycloak/creds" = {
-      username = "admin"
-      password = "{ _RANDOM_ = 18 }"
+  org_vars       = read_terragrunt_config(find_in_parent_folders("org.hcl"))
+  org_infras_org = local.org_vars.locals.infras_organization
 
-      kafka_ui_client_id     = "kafka-ui"
-      kafka_ui_client_name   = "kafka-ui"
-      kafka_ui_client_secret = "{ _RANDOM_ = 32 }"
+  environment  = "prod"
+  cluster_name = "prod"
 
-    }
-  }
-
-  jenkins = {
-    "jenkins/creds" = {
-      username = "admin"
-      password = "{ _RANDOM_ = 18 }"
-    }
-  }
-
-  grafana = {
-    "grafana/creds" = {
-      username = "admin"
-      password = "{ _RANDOM_ = 18 }"
-    }
-  }
-
-  kafka = {
-    "kafka/creds" = {
-      clientUsername = "admin"
-      clientPassword = "{ _RANDOM_ = 18 }"
-    }
-  }
-
-  vault = {
-    "vault/params" = {
-      cluster_addr = local.vault_address
-    }
-
-    "vault/creds" = {
-      root_token = local.vault_token
-    }
-  }
-
-  database = {
-    "Database/params" = {
-      DBClusterEndpoint = get_env("DB_CLUSTER_ENDPOINT", "192.168.56.31")
-      DBClusterPort     = 5432
-    }
-
-    "Database/fiesta/creds" = {
-      username = "fiesta"
-      password = "{ _RANDOM_ = 18 }"
-      database = "fiesta"
-    }
-
-    "Database/keycloak/creds" = {
-      pg_pass  = "{ _RANDOM_ = 18 }"
-      password = "{ _RANDOM_ = 18 }"
-      username = "bn_keycloak"
-      database = "keycloak"
-    }
-  }
-
-  global = {
+  secrets = {
     "artifactory/params" = {
-      registry = get_env("ARTIFACTORY_REGISTRY", "nthedao")
+      registry = local.backend_artifactory_registry
     }
+
+    "docker/creds" = {
+      username = local.backend_docker_username
+      password = local.backend_docker_token
+      email    = local.backend_docker_email
+    }
+
+    "docker/params" = {
+      registry = local.backend_docker_registry
+    }
+
+    "github/params" = {
+      # fitmate-gitops lives under the FITMate-Platform org (private, HTTPS) — the canonical GitOps repo
+      # (ADR-032). NOT the shared backend gitops_url (git@github.com:TheDao032/gitops-apps), which is the
+      # retired repo. HTTPS because the new repo is a different org; ArgoCD auths via PAT (github/creds).
+      url         = "https://github.com/FITMate-Platform"
+      gitops_repo = "fitmate-gitops"
+      insecure    = "false"
+      enablelfs   = "false"
+    }
+
+    "github/creds" = {
+      ssh_priv_key = local.backend_ssh_priv_key
+      username     = local.backend_github_username
+      token        = local.backend_github_token
+    }
+
+    # GHCR image-pull credentials, PER APP (SCRUM-191). Each app's ESO ExternalSecret (in ns
+    # fitmate-<app>, via the fitmate-<app>-eso k8s-auth role) reads {username, token} from here and
+    # renders a dockerconfigjson `ghcr-pull` Secret → imagePullSecrets, so pods can pull private
+    # ghcr.io/fitmate-platform/* images. Per-app path (NOT a shared one): the per-app Vault roles are
+    # read-scoped to fitmate/data/local/<app>/* only, so a shared path would be unreadable by them.
+    # token needs read:packages (the github PAT already has it); for prod, use a dedicated
+    # read:packages-only token instead of reusing the repo PAT.
+    "trainee/ghcr-pull" = {
+      username = local.backend_github_username
+      token    = local.backend_github_token
+    }
+    "website/ghcr-pull" = {
+      username = local.backend_github_username
+      token    = local.backend_github_token
+    }
+
+    "argocd/params" = {
+    }
+
+    "argocd/creds" = {
+      username = "admin"
+      password = "{ _RANDOM_ = 18 }"
+    }
+
+    # PostgreSQL/Citus (on-prem, NOT k8s) — consumed by the `database` unit.
+    # superuser (tf_admin) is the role the cyrilgdn provider LOGS IN as, so its password must
+    # be a STABLE, pre-provisioned value (NOT _RANDOM_): the same PG_ADMIN_PASSWORD is used to
+    # create the role in the citus-docker entrypoint AND stored here for the module to read.
+    "database/superuser/creds" = {
+      username = "tf_admin"
+      password = get_env("PG_ADMIN_PASSWORD", "change-me-tf-admin")
+    }
+    # Per-application-service DB roles. app (read-write, owns the db) / ro (read-only). app/ro are
+    # CREATED by the database module, so _RANDOM_ is fine — Vault is the source of truth and the
+    # module sets each role's password to what lands here. Keys grouped per service:
+    # database/<service>/<role>/creds. Real FITMate services with Postgres (6 Go services):
+    #   trainee
+    "database/trainee/app/creds" = { username = "trainee_prod_app", password = "{ _RANDOM_ = 18 }" } # prod-suffixed (shared Postgres, no collision w/ local)
+    "database/trainee/ro/creds"  = { username = "trainee_prod_ro", password = "{ _RANDOM_ = 18 }" }
+    #   trainer
+    "database/trainer/app/creds" = { username = "trainer_app", password = "{ _RANDOM_ = 18 }" }
+    "database/trainer/ro/creds"  = { username = "trainer_ro", password = "{ _RANDOM_ = 18 }" }
+    #   booking
+    "database/booking/app/creds" = { username = "booking_app", password = "{ _RANDOM_ = 18 }" }
+    "database/booking/ro/creds"  = { username = "booking_ro", password = "{ _RANDOM_ = 18 }" }
+    #   inquiry
+    "database/inquiry/app/creds" = { username = "inquiry_app", password = "{ _RANDOM_ = 18 }" }
+    "database/inquiry/ro/creds"  = { username = "inquiry_ro", password = "{ _RANDOM_ = 18 }" }
+    #   admin
+    "database/admin/app/creds" = { username = "admin_app", password = "{ _RANDOM_ = 18 }" }
+    "database/admin/ro/creds"  = { username = "admin_ro", password = "{ _RANDOM_ = 18 }" }
+    #   payment — WRITE-ONLY today (config/prod minimal, gateway unbuilt) → app role only, no ro
+    "database/payment/app/creds" = { username = "payment_app", password = "{ _RANDOM_ = 18 }" }
+    #   keycloak — its own db + owner role (runs its OWN schema migrations → full DDL, no ro).
+    #   Connects DIRECT to :5432 (NOT pgbouncer transaction pooling — breaks its advisory locks).
+    "database/keycloak/app/creds" = { username = "keycloak_app", password = "{ _RANDOM_ = 18 }" }
+
+    # Keycloak master-realm BOOTSTRAP ADMIN (CR spec.bootstrapAdmin) — a Keycloak user, SEPARATE from
+    # the keycloak_app DB role above. Replaces the operator's auto-generated temp-admin.
+    "keycloak/admin/creds" = { username = "admin", password = "{ _RANDOM_ = 20 }" }
+
+    # Keycloak realm seed users — e2e test creds for the fitmate realm (keycloak/<realm>/<user>/creds).
+    "keycloak/fitmate/trainee1/creds" = { username = "trainee1", password = "{ _RANDOM_ = 16 }" }
+
+    # ── Keycloak token-validation config for backend services (NON-secret; issuer/audience/JWKS) ──
+    # ESO syncs fitmate/prod/trainee/params → a trainee-keycloak Secret (role fitmate-trainee-prod-eso,
+    # mountPath kubernetes-prod). Env-var names verified against fitmate-trainee-service KeycloakConfig.
+    #   ISSUER  : the PUBLIC browser-facing host (auth.fitmate.me) — MUST equal the token `iss`.
+    #   JWKSURL : the IN-CLUSTER Service URL (shared Keycloak) — pods use this; the issuer/JWKS split.
+    # ⚠️ DEPENDS ON Phase 5 ([[production-cloudflare-tunnel]]): prod REUSES local's Keycloak, whose CR
+    # hostname is currently PINNED to keycloak.k3s.local — so tokens still carry iss=keycloak.k3s.local
+    # until KC's hostname is made dynamic/multi-host (or the prod realm gets auth.fitmate.me as its
+    # frontend URL). This issuer WON'T validate until then. MVP: only trainee migrated.
+    "trainee/params" = {
+      KEYCLOAK_ISSUER   = "https://auth.fitmate.me/realms/fitmate"
+      KEYCLOAK_AUDIENCE = "fitmate-backend"
+      KEYCLOAK_JWKSURL  = "http://keycloak-service.keycloak.svc.cluster.local:8080/realms/fitmate/protocol/openid-connect/certs"
+    }
+
+    # "jenkins/creds" = {
+    #   username = "admin"
+    #   password = "{ _RANDOM_ = 18 }"
+    # }
+    #
+    # "grafana/creds" = {
+    #   username = "admin"
+    #   password = "{ _RANDOM_ = 18 }"
+    # }
+    #
+    # "loki/creds" = {
+    #   username = "admin"
+    #   password = "{ _RANDOM_ = 18 }"
+    # }
+    #
+    # "kafka/creds" = {
+    #   clientUsername = "admin"
+    #   clientPassword = "{ _RANDOM_ = 18 }"
+    # }
+
+    # Commented until Vault is deployed + initialized — vault_address / vault_token
+    # come from vault.hcl (uncommented above at that stage).
+    # "vault/params" = {
+    #   clusterAddr = local.vault_address
+    # }
+    #
+    # "vault/creds" = {
+    #   rootToken = local.vault_token
+    # }
+
+    # "database/params" = {
+    #   DBClusterEndpoint = get_env("DB_CLUSTER_ENDPOINT", "192.168.56.31")
+    #   DBClusterPort     = 5432
+    # }
+    #
+    # "database/admin-service/creds" = {
+    #   username = "fiesta"
+    #   password = "{ _RANDOM_ = 18 }"
+    #   database = "fiesta"
+    # }
+
+    # "podRestartCollector/creds" = {
+    #   slackWebhookUrl = get_env("SLACK_WEBHOOK_URL", "")
+    # }
   }
 
-  cloudflare_api_token = get_env("CLOUDFLARE_API_TOKEN", "")
+  # cloudflare_api_token = get_env("CLOUDFLARE_API_TOKEN", "")
 
-  # psql_vms = {
-  #   conn-pool: get_env("PSQL_CONN_POOL")
-  #   coordinator1: get_env("PSQL_COORDINATOR_1")
-  #   worker1: get_env("PSQL_WORKER_1")
-  #   worker2: get_env("PSQL_WORKER_2")
-  # }
+  tags = {
+    created_by    = "terraform"
+    environment   = local.environment
+    organiazation = local.org_infras_org
+  }
 
-  # tags = {
-  #   CreatedBy = "Terraform"
-  # }
 
-  # TODO: populate real per-env secrets (mirror the `local` env's secrets map). Empty placeholder
-  # so the vault-secrets stack parses (references local.environment_vars.locals.secrets); it seeds
-  # NO secrets for this env until filled in.
-  secrets = {}
 }

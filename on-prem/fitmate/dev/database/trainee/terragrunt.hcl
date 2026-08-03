@@ -14,7 +14,7 @@ terraform {
 # same as the other units). Runtime prereqs (coordinator reachable + SSH) are not gated here.
 exclude {
   if = run_cmd("--terragrunt-quiet", "bash", "-c",
-    "curl -fs -o /dev/null --max-time 3 $${VAULT_ADDR:-http://vault.k3s.local}/v1/sys/health && echo false || echo true"
+    "curl -fs -o /dev/null --max-time 3 $${VAULT_ADDR:-http://vault.k3s.dev}/v1/sys/health && echo false || echo true"
   ) == "true"
   actions = ["all"]
 }

@@ -13,11 +13,9 @@ terraform {
 # endpoint (a stale VAULT_TOKEN hardcoded in .envrc.local makes a token-presence gate
 # useless): `curl -f` fails while Vault is down/sealed/uninitialized → exclude; 200 →
 # include. `run --all` picks this unit up automatically once Vault is live. See on-prem/vault.hcl.
-# SHARED-PLATFORM PROD (2026-08-02): prod reuses LOCAL's Vault — gate + VAULT_ADDR target vault.k3s.local.
-# Writes land under the `prod/` folder of local's `fitmate` mount → fitmate/data/prod/<key> (no collision).
 exclude {
   if = run_cmd("--terragrunt-quiet", "bash", "-c",
-    "curl -fs -o /dev/null --max-time 3 $${VAULT_ADDR:-http://vault.k3s.local}/v1/sys/health && echo false || echo true"
+    "curl -fs -o /dev/null --max-time 3 $${VAULT_ADDR:-http://vault.k3s.dev}/v1/sys/health && echo false || echo true"
   ) == "true"
   actions = ["all"]
 }

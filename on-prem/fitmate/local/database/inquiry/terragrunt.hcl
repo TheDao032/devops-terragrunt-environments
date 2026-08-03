@@ -33,12 +33,14 @@ include "root" {
   path = find_in_parent_folders("root.hcl")
 }
 
+include "database" {
+  path = find_in_parent_folders("database.hcl")
+}
+
 inputs = {
   pg_host      = local.pg_host
   pg_port      = 5432
-  pg_superuser = dependency.vault-secrets.outputs.secrets["database/superuser/creds"]["username"]
-  pg_password  = dependency.vault-secrets.outputs.secrets["database/superuser/creds"]["password"]
-  pg_sslmode   = "prefer"
+  pg_superuser = get_env("PG_SUPERUSER", "tf_admin")
 
   ssh_host = local.ssh_host
   ssh_user = get_env("PG_SSH_USER", "packer")
@@ -53,7 +55,7 @@ inputs = {
         extensions = ["uuid-ossp"]
         schemas    = ["app"]
         # NO seed sql — owned by database/migrations/inquiry/ (constitution §V).
-        pgbouncer = { register = true }
+        pgbouncer = { register = false }
       }
       roles = {
         inquiry_app = { login = true, password = dependency.vault-secrets.outputs.secrets["database/inquiry/app/creds"]["password"] }

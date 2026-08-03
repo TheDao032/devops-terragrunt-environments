@@ -6,10 +6,10 @@ locals {
   org_name        = local.org_config_vars.locals.infras_organization
 
   vault_config_vars = read_terragrunt_config(find_in_parent_folders("vault.hcl"))
-  vault_address     = local.vault_config_vars.locals.vault_address # host-side (vault.k3s.local) — NOT resolvable from inside the cluster
+  vault_address     = local.vault_config_vars.locals.vault_address # host-side (vault.k3s.dev) — NOT resolvable from inside the cluster
 
   # In-cluster Vault address for the ESO SecretStore. External Secrets runs as a POD, so it must use
-  # cluster DNS (CoreDNS), NOT the host-only `vault.k3s.local` ingress hostname (pods can't resolve
+  # cluster DNS (CoreDNS), NOT the host-only `vault.k3s.dev` ingress hostname (pods can't resolve
   # it → "no such host" → InvalidProviderConfig). vault-active = the unsealed active node; HTTPS on
   # 8200. The ESO controller runs with VAULT_SKIP_VERIFY=true, so the cert-manager private CA needs
   # no caBundle here (lab); for prod, add caProvider → the vault-tls-ca secret instead.
@@ -35,7 +35,7 @@ terraform {
 # `curl -f` fails while Vault is down/sealed → exclude; 200 → include. See on-prem/vault.hcl.
 exclude {
   if = run_cmd("--terragrunt-quiet", "bash", "-c",
-    "curl -fs -o /dev/null --max-time 3 $${VAULT_ADDR:-http://vault.k3s.local}/v1/sys/health && echo false || echo true"
+    "curl -fs -o /dev/null --max-time 3 $${VAULT_ADDR:-http://vault.k3s.dev}/v1/sys/health && echo false || echo true"
   ) == "true"
   actions = ["all"]
 }
@@ -160,7 +160,7 @@ inputs = {
     # Names for the chart's ExternalSecrets (applied after the release; reconcile once the gitops
     # SecretStore exists). store_name = the ESO SecretStore in the gitops ns (external-secrets stack).
     secret = {
-      vault_address       = local.vault_incluster_address                                      # in-cluster (ESO pod) — NOT vault.k3s.local
+      vault_address       = local.vault_incluster_address                                      # in-cluster (ESO pod) — NOT vault.k3s.dev
       kv_mount            = dependency.vault-auths.outputs.kv_mount_path                       # org KV mount ("fitmate") the SecretStore reads FROM (was hardcoded to the env "local")
       approle_path        = "approle"                                                          # auth mount (vault_auth_backend.main default path)
       role_id             = dependency.vault-auths.outputs.roles["external-secrets"].role_id   # public

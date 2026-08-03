@@ -12,7 +12,7 @@ terraform {
 
 exclude {
   if = run_cmd("--terragrunt-quiet", "bash", "-c",
-    "curl -fs -o /dev/null --max-time 3 $${VAULT_ADDR:-http://vault.k3s.local}/v1/sys/health && echo false || echo true"
+    "curl -fs -o /dev/null --max-time 3 $${VAULT_ADDR:-http://vault.k3s.dev}/v1/sys/health && echo false || echo true"
   ) == "true"
   actions = ["all"]
 }
@@ -21,9 +21,9 @@ dependency "vault-secrets" {
   config_path = "../../vault-secrets"
   mock_outputs = {
     secrets = {
-      "database/superuser/creds"   = { username = "tf_admin", password = "MOCK" }
-      "database/trainer/app/creds" = { username = "trainer_app", password = "MOCK" }
-      "database/trainer/ro/creds"  = { username = "trainer_ro", password = "MOCK" }
+      "database/superuser/creds" = { username = "tf_admin", password = "MOCK" }
+      "database/admin/app/creds" = { username = "admin_app", password = "MOCK" }
+      "database/admin/ro/creds"  = { username = "admin_ro", password = "MOCK" }
     }
   }
   mock_outputs_merge_strategy_with_state = "shallow"
@@ -46,24 +46,24 @@ inputs = {
   ssh_user = get_env("PG_SSH_USER", "packer")
   ssh_opts = get_env("PG_SSH_OPTS", "-i ~/.ssh/lab_ed25519 -o StrictHostKeyChecking=accept-new -o BatchMode=yes")
 
-  # trainer-service — Trainers, verification, availability, reviews summary (data-model.md).
+  # admin-service — admin/back-office data (PII-whitelisted, ADR-006). Go service, read+write DSN.
   services = {
-    trainer = {
+    admin = {
       database = {
-        name       = "trainer"
-        owner      = "trainer_app"
+        name       = "admin"
+        owner      = "admin_app"
         extensions = ["uuid-ossp"]
         schemas    = ["app"]
-        # NO seed sql — owned by database/migrations/trainer/ (constitution §V).
+        # NO seed sql — owned by database/migrations/admin/ (constitution §V).
         pgbouncer = { register = false }
       }
       roles = {
-        trainer_app = { login = true, password = dependency.vault-secrets.outputs.secrets["database/trainer/app/creds"]["password"] }
-        trainer_ro  = { login = true, password = dependency.vault-secrets.outputs.secrets["database/trainer/ro/creds"]["password"] }
+        admin_app = { login = true, password = dependency.vault-secrets.outputs.secrets["database/admin/app/creds"]["password"] }
+        admin_ro  = { login = true, password = dependency.vault-secrets.outputs.secrets["database/admin/ro/creds"]["password"] }
       }
       grants = [
-        { role = "trainer_ro", schema = "app", object_type = "schema", privileges = ["USAGE"] },
-        { role = "trainer_ro", schema = "app", object_type = "table", privileges = ["SELECT"], on_future = true, owner = "trainer_app" },
+        { role = "admin_ro", schema = "app", object_type = "schema", privileges = ["USAGE"] },
+        { role = "admin_ro", schema = "app", object_type = "table", privileges = ["SELECT"], on_future = true, owner = "admin_app" },
       ]
     }
   }

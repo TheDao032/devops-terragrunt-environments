@@ -12,7 +12,7 @@ terraform {
 
 exclude {
   if = run_cmd("--terragrunt-quiet", "bash", "-c",
-    "curl -fs -o /dev/null --max-time 3 $${VAULT_ADDR:-http://vault.k3s.local}/v1/sys/health && echo false || echo true"
+    "curl -fs -o /dev/null --max-time 3 $${VAULT_ADDR:-http://vault.k3s.prod}/v1/sys/health && echo false || echo true"
   ) == "true"
   actions = ["all"]
 }
@@ -22,8 +22,8 @@ dependency "vault-secrets" {
   mock_outputs = {
     secrets = {
       "database/superuser/creds"   = { username = "tf_admin", password = "MOCK" }
-      "database/trainer/app/creds" = { username = "trainer_app", password = "MOCK" }
-      "database/trainer/ro/creds"  = { username = "trainer_ro", password = "MOCK" }
+      "database/inquiry/app/creds" = { username = "inquiry_app", password = "MOCK" }
+      "database/inquiry/ro/creds"  = { username = "inquiry_ro", password = "MOCK" }
     }
   }
   mock_outputs_merge_strategy_with_state = "shallow"
@@ -46,24 +46,24 @@ inputs = {
   ssh_user = get_env("PG_SSH_USER", "packer")
   ssh_opts = get_env("PG_SSH_OPTS", "-i ~/.ssh/lab_ed25519 -o StrictHostKeyChecking=accept-new -o BatchMode=yes")
 
-  # trainer-service — Trainers, verification, availability, reviews summary (data-model.md).
+  # inquiry-service — Pre-booking messaging (data-model.md).
   services = {
-    trainer = {
+    inquiry = {
       database = {
-        name       = "trainer"
-        owner      = "trainer_app"
+        name       = "inquiry"
+        owner      = "inquiry_app"
         extensions = ["uuid-ossp"]
         schemas    = ["app"]
-        # NO seed sql — owned by database/migrations/trainer/ (constitution §V).
+        # NO seed sql — owned by database/migrations/inquiry/ (constitution §V).
         pgbouncer = { register = false }
       }
       roles = {
-        trainer_app = { login = true, password = dependency.vault-secrets.outputs.secrets["database/trainer/app/creds"]["password"] }
-        trainer_ro  = { login = true, password = dependency.vault-secrets.outputs.secrets["database/trainer/ro/creds"]["password"] }
+        inquiry_app = { login = true, password = dependency.vault-secrets.outputs.secrets["database/inquiry/app/creds"]["password"] }
+        inquiry_ro  = { login = true, password = dependency.vault-secrets.outputs.secrets["database/inquiry/ro/creds"]["password"] }
       }
       grants = [
-        { role = "trainer_ro", schema = "app", object_type = "schema", privileges = ["USAGE"] },
-        { role = "trainer_ro", schema = "app", object_type = "table", privileges = ["SELECT"], on_future = true, owner = "trainer_app" },
+        { role = "inquiry_ro", schema = "app", object_type = "schema", privileges = ["USAGE"] },
+        { role = "inquiry_ro", schema = "app", object_type = "table", privileges = ["SELECT"], on_future = true, owner = "inquiry_app" },
       ]
     }
   }

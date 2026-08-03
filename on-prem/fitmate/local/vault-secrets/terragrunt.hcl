@@ -65,4 +65,9 @@ inputs = {
       }
     }
   )
+
+  # Pre-hash selected passwords into stable siblings (chart fields wanting a hash, not plaintext).
+  password_hashes = {
+    "argocd/creds" = { algo = "bcrypt" } # → adds argocd/creds.password_bcrypt (random_password.bcrypt_hash)
+  }
 }

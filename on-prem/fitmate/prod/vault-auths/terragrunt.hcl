@@ -42,6 +42,10 @@ terraform {
 # genuinely up+unsealed, then picks them up automatically. Nothing outside the vault
 # units (vault-auths/vault-secrets/ops-tools) depends on them, so no dangling dependency.
 # ($${...} escapes to a literal ${...} for the shell; run_cmd result is cached across units.)
+#
+# SHARED-PLATFORM PROD (2026-08-02, [[production-cloudflare-tunnel]] Phase 1): prod reuses LOCAL's
+# Vault (one Vault on the shared lab cluster) — it does NOT deploy its own. So the gate targets the
+# EXISTING Vault (vault.k3s.local) and VAULT_ADDR must point there. init-resources is skipped (below).
 exclude {
   if = run_cmd("--terragrunt-quiet", "bash", "-c",
     "curl -fs -o /dev/null --max-time 3 $${VAULT_ADDR:-http://vault.k3s.local}/v1/sys/health && echo false || echo true"
@@ -60,67 +64,43 @@ include "vault" {
   path = find_in_parent_folders("vault.hcl")
 }
 
-dependency "init-resources" {
-  config_path = "../init-resources"
-
-  mock_outputs = {
-    init-resources_output = "mock-init-resources-output"
-  }
-
-  # mock_outputs_merge_strategy_with_state = "shallow"
-}
+# SHARED-PLATFORM PROD: init-resources (Vault deploy) is SKIPPED — prod reuses local's Vault. The
+# module only uses init-resources as an ordering dep (no consumed outputs), so it's removed here to
+# stop `run --all` from standing up a second Vault. Local still owns init-resources.
+# dependency "init-resources" {
+#   config_path  = "../init-resources"
+#   mock_outputs = { init-resources_output = "mock-init-resources-output" }
+# }
 
 inputs = {
   environment = local.environment
-  org         = local.org # KV mount + policy paths become "<org>/<env>" = "${local.org}/${local.environment}"
-  mount_kv    = true      # this stack owns the KV-v2 engine at path "${local.org}/${local.environment}"
+  org         = local.org
 
-  # Policies (same shape as vault-roles). admin = full control of every KV path; dev = scoped.
-  roles = {
-    admin = [
-      {
-        path                  = "*"
-        data_capabilities     = "create,read,update,delete,list"
-        metadata_capabilities = "create,read,update,delete,list"
-        delete_capabilities   = "create,read,update,delete,list"
-        destroy_capabilities  = "create,read,update,delete,list"
-      },
-    ]
-    dev = [
-      {
-        path                  = "dev/*"
-        data_capabilities     = "create,read,update,list"
-        metadata_capabilities = "create,read,update,list"
-        delete_capabilities   = "create,read,update,list"
-        destroy_capabilities  = "create,read,update,list"
-      },
-    ]
-    external-secrets = [
-      {
-        path                  = "*"         # → fitmate/local/data/* , fitmate/local/metadata/* , ...
-        data_capabilities     = "read"      # ESO reads secret values
-        metadata_capabilities = "read,list" # needed for property/find lookups
-        delete_capabilities   = "deny"      # explicit deny (empty string = invalid policy)
-        destroy_capabilities  = "deny"
-      }
-    ]
-  }
+  # ── SHARED-PLATFORM PROD ISOLATION (2026-08-02, [[production-cloudflare-tunnel]] Phase 1) ──
+  # Prod shares LOCAL's single Vault on the lab cluster. To avoid colliding with local:
+  #   • mount_kv=false → REUSE local's `fitmate` KV mount. Prod secrets live under the `prod/` folder
+  #     (path_root=prod) → fitmate/data/prod/<svc>/*. (mount_kv=true would re-create the shared
+  #     `fitmate` mount → "path already in use".)
+  #   • roles={} + users={} → local already owns the admin/dev/external-secrets policies + the
+  #     userpass backend/users; re-creating them collides. Prod's ESO policies come from k8s_auth below.
+  #   • k8s_auth_path="kubernetes-prod" → prod owns its OWN k8s auth backend (local owns "kubernetes").
+  mount_kv      = false
+  roles         = {}
+  users         = {}
+  k8s_auth_path = "kubernetes-prod"
 
-  # Kubernetes auth — per-app ESO SecretStores (LOCKED contract w/ FitMate, ADR-036). Each app's
-  # ExternalSecrets pod authenticates with its own ServiceAccount JWT (no secret_id in git) and
-  # gets a read-only Vault token scoped to ITS OWN secret subtree only. Apps live in isolated
-  # namespaces (not the shared `fitmate` ns). policy path is mount-relative → renders to
-  # "fitmate/data/local/<app>/*".
-  # One fitmate-<svc>-eso role per service in local.eso_service_sa, each bound to (ns fitmate-<svc>,
-  # SA <sa>) and read-only on its OWN subtree (fitmate/data/local/<svc>/*). Generated so the whole
-  # stack's ESO auth is provisioned ahead of FitMate authoring each app chart.
+  # Kubernetes auth — per-app ESO SecretStores (ADR-036), PROD-SUFFIXED so nothing collides with
+  # local's roles/namespaces on the shared cluster. One `fitmate-<svc>-prod-eso` role per service,
+  # bound to (ns fitmate-<svc>-prod, SA <sa>), read-only on its OWN prod subtree fitmate/data/prod/<svc>/*.
+  # Lives on the "kubernetes-prod" auth backend (k8s_auth_path above). FitMate's PROD SecretStores set
+  # auth.kubernetes.role=fitmate-<svc>-prod-eso + auth.kubernetes.mountPath=kubernetes-prod.
   k8s_auth = {
-    for svc, sa in local.eso_service_sa : "fitmate-${svc}-eso" => {
-      namespaces       = ["fitmate-${svc}"]
+    for svc, sa in local.eso_service_sa : "fitmate-${svc}-prod-eso" => {
+      namespaces       = ["fitmate-${svc}-prod"]
       service_accounts = [sa]
       policies = [
         {
-          path                  = "${svc}/*" # → fitmate/data/local/<svc>/*
+          path                  = "${svc}/*" # → fitmate/data/prod/<svc>/*
           data_capabilities     = "read"
           metadata_capabilities = "read,list"
           delete_capabilities   = "deny"
@@ -129,17 +109,5 @@ inputs = {
       ]
     }
   }
-
-  # Users. Passwords come from the ENV so nothing secret is in the repo/state-as-plaintext.
-  # Before apply:  export VAULT_ADMIN_PASSWORD=...  VAULT_DEV_PASSWORD=...
-  users = {
-    dao = {
-      password = "{ _RANDOM_ = 18 }"
-      policies = ["admin"]
-    }
-    dev = {
-      password = "{ _RANDOM_ = 18 }"
-      policies = ["dev"]
-    }
-  }
+  # (users = {} set above — prod reuses local's userpass users; no new users on the shared Vault.)
 }
