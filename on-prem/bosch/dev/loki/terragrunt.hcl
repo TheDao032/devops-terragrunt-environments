@@ -27,6 +27,10 @@ include "root" {
   path = find_in_parent_folders("root.hcl")
 }
 
+include "kube" {
+  path = find_in_parent_folders("kube.hcl")
+}
+
 inputs = {
   helm_repository = "https://grafana.github.io/helm-charts"
   namespace       = "monitoring"

@@ -48,6 +48,10 @@ include "root" {
   path = find_in_parent_folders("root.hcl")
 }
 
+include "kube" {
+  path = find_in_parent_folders("kube.hcl")
+}
+
 inputs = {
   image_tag                      = "latest"
   chart_version                  = "2024.6.4"
