@@ -12,7 +12,7 @@ terraform {
 
 exclude {
   if = run_cmd("--terragrunt-quiet", "bash", "-c",
-    "curl -fs -o /dev/null --max-time 3 $${VAULT_ADDR:-http://vault.k3s.prod}/v1/sys/health && echo false || echo true"
+    "curl -fs -o /dev/null --max-time 3 $${VAULT_ADDR:-http://vault.k3s.fitmate}/v1/sys/health && echo false || echo true"
   ) == "true"
   actions = ["all"]
 }
@@ -22,8 +22,8 @@ dependency "vault-secrets" {
   mock_outputs = {
     secrets = {
       "database/superuser/creds"   = { username = "tf_admin", password = "MOCK" }
-      "database/inquiry/app/creds" = { username = "inquiry_app", password = "MOCK" }
-      "database/inquiry/ro/creds"  = { username = "inquiry_ro", password = "MOCK" }
+      "database/inquiry/app/creds" = { username = "inquiry_app_${local.environment}", password = "MOCK" }
+      "database/inquiry/ro/creds"  = { username = "inquiry_ro_${local.environment}", password = "MOCK" }
     }
   }
   mock_outputs_merge_strategy_with_state = "shallow"
@@ -33,8 +33,8 @@ include "root" {
   path = find_in_parent_folders("root.hcl")
 }
 
-include "database" {
-  path = find_in_parent_folders("database.hcl")
+include "postgresql" {
+  path = find_in_parent_folders("postgresql.hcl")
 }
 
 inputs = {
@@ -50,20 +50,20 @@ inputs = {
   services = {
     inquiry = {
       database = {
-        name       = "inquiry"
-        owner      = "inquiry_app"
+        name       = "inquiry_${local.environment}"
+        owner      = "inquiry_app_${local.environment}"
         extensions = ["uuid-ossp"]
         schemas    = ["app"]
         # NO seed sql — owned by database/migrations/inquiry/ (constitution §V).
         pgbouncer = { register = false }
       }
       roles = {
-        inquiry_app = { login = true, password = dependency.vault-secrets.outputs.secrets["database/inquiry/app/creds"]["password"] }
-        inquiry_ro  = { login = true, password = dependency.vault-secrets.outputs.secrets["database/inquiry/ro/creds"]["password"] }
+        "inquiry_app_${local.environment}" = { login = true, password = dependency.vault-secrets.outputs.secrets["database/inquiry/app/creds"]["password"] }
+        "inquiry_ro_${local.environment}"  = { login = true, password = dependency.vault-secrets.outputs.secrets["database/inquiry/ro/creds"]["password"] }
       }
       grants = [
-        { role = "inquiry_ro", schema = "app", object_type = "schema", privileges = ["USAGE"] },
-        { role = "inquiry_ro", schema = "app", object_type = "table", privileges = ["SELECT"], on_future = true, owner = "inquiry_app" },
+        { role = "inquiry_ro_${local.environment}", schema = "app", object_type = "schema", privileges = ["USAGE"] },
+        { role = "inquiry_ro_${local.environment}", schema = "app", object_type = "table", privileges = ["SELECT"], on_future = true, owner = "inquiry_app_${local.environment}" },
       ]
     }
   }

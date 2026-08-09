@@ -34,6 +34,10 @@ include "root" {
   path = find_in_parent_folders("root.hcl")
 }
 
+include "vault" {
+  path = find_in_parent_folders("vault.hcl")
+}
+
 include "keycloak" {
   path = find_in_parent_folders("keycloak.hcl")
 }
@@ -95,7 +99,7 @@ inputs = {
     enabled = true
     mount   = "fitmate"
     clients = {
-      "fitmate-website" = { path = "local/website/creds", key = "AUTH_KEYCLOAK_SECRET" }
+      "fitmate-website" = { path = "prod/website/creds", key = "AUTH_KEYCLOAK_SECRET" }
     }
   }
 }

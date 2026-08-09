@@ -14,7 +14,7 @@ locals {
   org_vars       = read_terragrunt_config(find_in_parent_folders("org.hcl"))
   org_infras_org = local.org_vars.locals.infras_organization
 
-  environment  = "dev"
+  environment  = "stg"
   cluster_name = "fitmate"
 
   # Realm name for this env on the shared Keycloak (matches keycloak/fitmate unit): fitmate-<env>,

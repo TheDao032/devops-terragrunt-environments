@@ -21,8 +21,8 @@ dependency "vault-secrets" {
   config_path = "../../vault-secrets"
   mock_outputs = {
     secrets = {
-      "database/superuser/creds"   = { username = "tf_admin", password = "MOCK" }
-      "database/payment/app/creds" = { username = "payment_app_${local.environment}", password = "MOCK" }
+      "database/superuser/creds"    = { username = "tf_admin", password = "MOCK" }
+      "database/keycloak/app/creds" = { username = "keycloak_app", password = "MOCK" }
     }
   }
   mock_outputs_merge_strategy_with_state = "shallow"
@@ -45,23 +45,23 @@ inputs = {
   ssh_user = get_env("PG_SSH_USER", "packer")
   ssh_opts = get_env("PG_SSH_OPTS", "-i ~/.ssh/lab_ed25519 -o StrictHostKeyChecking=accept-new -o BatchMode=yes")
 
-  # payment-service — Escrow, audit log, wallets, withdrawals, gateway webhook events (data-model.md).
-  # Constitutional tables: escrow_audit_log (§I), webhook_events (§IX) → `audit` schema.
-  # ⚠️ WRITE-ONLY today: payment config/prod is DATABASE_WRITE_DB_CONNECTION_STRING only (gateway
-  # integration unbuilt). So a single app (RW) role, NO read-only role yet. Add payment_ro_${local.environment} + a
-  # SELECT grant when a read consumer exists.
+  # Keycloak's own database. Keycloak owns it and runs its OWN Liquibase schema migrations, so:
+  #   - keycloak_app is the owner (full DDL); NO read-only role, NO schemas (Keycloak uses public),
+  #     NO seed sql (Keycloak migrates itself on first boot).
+  #   - pgbouncer.register = FALSE: Keycloak must connect DIRECT to the coordinator :5432. Its DB
+  #     migrations take Postgres advisory locks + use prepared statements, which pgbouncer
+  #     transaction pooling (:6432) breaks. The Keycloak CR points at <lb>:5432/keycloak.
   services = {
-    payment = {
+    keycloak = {
       database = {
-        name       = "payment_${local.environment}"
-        owner      = "payment_app_${local.environment}"
-        extensions = ["uuid-ossp"]
-        schemas    = ["app", "audit"]
-        # NO seed sql — owned by database/migrations/payment/ (constitution §V).
-        pgbouncer = { register = false }
+        name       = "keycloak"
+        owner      = "keycloak_app"
+        extensions = []
+        schemas    = []
+        pgbouncer  = { register = false }
       }
       roles = {
-        "payment_app_${local.environment}" = { login = true, password = dependency.vault-secrets.outputs.secrets["database/payment/app/creds"]["password"] }
+        keycloak_app = { login = true, password = dependency.vault-secrets.outputs.secrets["database/keycloak/app/creds"]["password"] }
       }
       grants = []
     }

@@ -1,0 +1,323 @@
+locals {
+  environment_vars = read_terragrunt_config(find_in_parent_folders("env.hcl"))
+  environment      = local.environment_vars.locals.environment
+
+  org_config_vars = read_terragrunt_config(find_in_parent_folders("org.hcl"))
+  org_name        = local.org_config_vars.locals.infras_organization
+
+  vault_config_vars = read_terragrunt_config(find_in_parent_folders("vault.hcl"))
+  vault_address     = local.vault_config_vars.locals.vault_address # host-side (vault.k3s.fitmate) — NOT resolvable from inside the cluster
+
+  # In-cluster Vault address for the ESO SecretStore. External Secrets runs as a POD, so it must use
+  # cluster DNS (CoreDNS), NOT the host-only `vault.k3s.prod` ingress hostname (pods can't resolve
+  # it → "no such host" → InvalidProviderConfig). vault-active = the unsealed active node; HTTPS on
+  # 8200. The ESO controller runs with VAULT_SKIP_VERIFY=true, so the cert-manager private CA needs
+  # no caBundle here (lab); for prod, add caProvider → the vault-tls-ca secret instead.
+  vault_incluster_address = "https://vault-active.vault.svc.cluster.local:8200"
+
+  # Keycloak connects to the EXTERNAL Citus Postgres coordinator DIRECT (:5432, NOT pgbouncer —
+  # its schema migrations take advisory locks that transaction pooling breaks).
+  pg_host = get_env("PG_HOST", "192.168.105.10")
+
+  # Cluster-wide hostname suffix for the shared platform services (one Vault/ArgoCD/Keycloak).
+  # NOT k3s.<env> — these are single instances. Per-env APP hosts are <app>.<env>.k3s.fitmate.
+  cluster_suffix = local.environment_vars.locals.cluster_suffix
+
+  # secret_store_name = "vault-backend"
+  # secrets          = local.environment_vars.locals.secrets
+}
+
+terraform {
+  source = "../../../../../devops-terraform-modules//on-prem/${local.org_name}/ops-tools"
+  # source = "git::git@github.com:TheDao032/devops-terraform-modules.git//on-prem/${local.org_name}/k3s-resources?ref=${local.environment}"
+}
+
+# STANDALONE PROD (2026-08-04, [[production-cloudflare-tunnel]]): this cluster IS prod — it deploys its
+# OWN ArgoCD here (it then syncs the fitmate-prod AppProject + root-prod from fitmate-gitops PR #6).
+# Gate on Vault reachability (ops-tools reads vault-auths/vault-secrets outputs + the vault provider):
+# curl fails while Vault is down/sealed → exclude; 200 → include. Applied automatically once Vault is up.
+exclude {
+  if = run_cmd("--terragrunt-quiet", "bash", "-c",
+    "curl -fs -o /dev/null --max-time 3 $${VAULT_ADDR:-http://vault.k3s.fitmate}/v1/sys/health && echo false || echo true"
+  ) == "true"
+  actions = ["all"]
+}
+
+include "root" {
+  path = find_in_parent_folders("root.hcl")
+}
+
+include "kube" {
+  path = find_in_parent_folders("kube.hcl")
+}
+
+
+dependency "vault-auths" {
+  config_path = "../vault-auths"
+  mock_outputs = {
+    kv_mount_path = "mock"
+    roles = {
+      external-secrets = {
+        role_id      = "mock",
+        secret_id    = "mock",
+        client_token = "mock"
+      }
+    }
+  }
+
+  # Mocks used ONLY for validate/plan (never apply → a real apply can't write "MOCK" values).
+  # deep_map_only fills MISSING SUB-KEYS inside an existing map output (a newly-added secret key),
+  # so `run --all -- plan` works before the dependency is re-applied. Apply needs real outputs.
+  mock_outputs_allowed_terraform_commands = ["init", "validate", "plan"]
+  mock_outputs_merge_strategy_with_state  = "deep_map_only"
+}
+
+# ArgoCD reads GitHub/ArgoCD creds from vault-secrets and the ESO SecretStore name from
+# external-secrets. mock_outputs let the FIRST bring-up pass plan (ArgoCD off) before those
+# stacks exist; the SECOND pass (ArgoCD on) uses their real, applied outputs. Apply order:
+#   k3s-resources (argocd_conf absent) → vault-secrets → external-secrets → k3s-resources (this).
+dependency "vault-secrets" {
+  config_path = "../vault-secrets"
+  mock_outputs = {
+    secrets = {
+      "github/params"               = { url = "https://github.com/FITMate-Platform", gitops_repo = "fitmate-gitops" }
+      "github/creds"                = { ssh_priv_key = "MOCK", username = "MOCK", token = "MOCK" }
+      "argocd/creds"                = { password = "MOCK", password_bcrypt = "MOCK" }
+      "database/keycloak/app/creds" = { username = "keycloak_app", password = "MOCK" }
+      "keycloak/admin/creds"        = { username = "admin", password = "MOCK" }
+      "kafka/creds"                 = { clientUsername = "admin", clientPassword = "MOCK" }
+      "redis/creds"                 = { password = "MOCK" }
+    }
+  }
+
+  # Mocks used ONLY for validate/plan (never apply → a real apply can't write "MOCK" values).
+  # deep_map_only fills MISSING SUB-KEYS inside an existing map output (a newly-added secret key),
+  # so `run --all -- plan` works before the dependency is re-applied. Apply needs real outputs.
+  mock_outputs_allowed_terraform_commands = ["init", "validate", "plan"]
+  mock_outputs_merge_strategy_with_state  = "deep_map_only"
+}
+
+# ORDERING-ONLY edge (`dependencies`, plural — no output fetch). ops-tools deploys Keycloak, which
+# needs its Postgres DB (db `keycloak`, role `keycloak_app`) provisioned FIRST. Those creds come from
+# Vault (the vault-secrets dependency above), NOT from this unit's outputs — so we only need the
+# run-ORDER, not data. `database/` is a PARENT FOLDER (holds database.hcl + per-service sub-units),
+# not a unit itself → config_path="../database" errors "no terragrunt.hcl"; depend on the SUB-UNIT.
+# (ArgoCD needs no service DB; app DBs like trainee are consumed by gitops-deployed pods, not here.)
+dependencies {
+  paths = ["../database/keycloak"]
+}
+
+# dependency "external-secrets" {
+#   config_path = "../external-secrets"
+#   mock_outputs = {
+#     gitops_backend_name = "gitops-backend"
+#   }
+#   mock_outputs_merge_strategy_with_state = "shallow"
+# }
+
+inputs = {
+  # Keycloak (operator). Present ⇒ addons.tf enables the keycloak + keycloak-routing modules.
+  # DB = EXTERNAL Citus Postgres, coordinator DIRECT :5432 (db `keycloak`, role keycloak_app from
+  # Vault via vault-secrets). Routing = Gateway API HTTPRoute on the traefik-gateway `web` listener
+  # → the operator's keycloak-service :8080. CRDs come from init-resources; apply that stack first.
+  keycloak_conf = {
+    keycloak = {
+      hostname  = "keycloak.k3s.${local.cluster_suffix}"
+      namespace = "keycloak"
+      instances = 1
+    }
+    db = {
+      host     = local.pg_host
+      port     = 5432
+      database = "keycloak"
+      username = dependency.vault-secrets.outputs.secrets["database/keycloak/app/creds"]["username"]
+      password = dependency.vault-secrets.outputs.secrets["database/keycloak/app/creds"]["password"]
+    }
+    admin = {
+      username = dependency.vault-secrets.outputs.secrets["keycloak/admin/creds"]["username"]
+      password = dependency.vault-secrets.outputs.secrets["keycloak/admin/creds"]["password"]
+    }
+    routing = {
+      httproutes = [
+        {
+          name              = "keycloak"
+          namespace         = "keycloak"
+          gateway_name      = "traefik-gateway"
+          gateway_namespace = "traefik"
+          section_name      = "web"
+          hostnames         = ["keycloak.k3s.${local.cluster_suffix}"]
+          path_prefix       = "/"
+          backend_name      = "keycloak-service"
+          backend_port      = 8080
+        }
+      ]
+    }
+  }
+
+  # ArgoCD (core). Present ⇒ addons.tf enables the argocd + argocd-routing modules (see the
+  # two-pass note there). Reads live creds/store name from the vault-secrets + external-secrets
+  # dependency blocks below (mocked so the first bring-up pass still plans while ArgoCD is off).
+  argocd_conf = {
+    helm = {
+      # Latest argo-helm chart (2026-07-09). NOTE: 3-major jump from the old 7.8.10 scaffold —
+      # our values only touch stable keys (server.insecure, credentialTemplates, repositories),
+      # but skim the 8.0.0 / 9.0.0 / 10.0.0 breaking-change notes before the prod tenants adopt it.
+      chart_version = "10.1.3"
+      namespace     = "argocd"
+      repository    = "https://argoproj.github.io/argo-helm"
+      release_name  = "argo-cd"
+    }
+
+    # Only `domain` is consumed (values.yml.tftpl global.domain). Routing is Gateway API below.
+    ingress = {
+      domain = "argocd.k3s.${local.cluster_suffix}"
+    }
+
+    # Names for the chart's ExternalSecrets (applied after the release; reconcile once the gitops
+    # SecretStore exists). store_name = the ESO SecretStore in the gitops ns (external-secrets stack).
+    secret = {
+      vault_address       = local.vault_incluster_address                                      # in-cluster (ESO pod) — NOT vault.k3s.prod
+      kv_mount            = dependency.vault-auths.outputs.kv_mount_path                       # org KV mount ("fitmate") the SecretStore reads FROM (was hardcoded to the env "local")
+      approle_path        = "approle"                                                          # auth mount (vault_auth_backend.main default path)
+      role_id             = dependency.vault-auths.outputs.roles["external-secrets"].role_id   # public
+      secret_id           = dependency.vault-auths.outputs.roles["external-secrets"].secret_id # credential
+      approle_secret_name = "argocd-approle"
+      argocd_secret_name  = "argocd-ex-secret"
+
+      store_name                = "argocd-store-backend"
+      docker_config_secret_name = "docker-ex-configjson"
+      docker_token_secret_name  = "docker-ex-token"
+      github_secret_name        = "github-ex-ssh-priv-key"
+    }
+
+    github = {
+      url         = dependency.vault-secrets.outputs.secrets["github/params"]["url"]
+      gitops_repo = dependency.vault-secrets.outputs.secrets["github/params"]["gitops_repo"]
+      # HTTPS auth for the private fitmate-gitops repo — username + read PAT (ssh_priv_key retired with
+      # the old SSH repo). ArgoCD's https-creds credentialTemplate consumes these.
+      username = dependency.vault-secrets.outputs.secrets["github/creds"]["username"]
+      token    = dependency.vault-secrets.outputs.secrets["github/creds"]["token"]
+    }
+
+    common = {
+      admin_password = dependency.vault-secrets.outputs.secrets["argocd/creds"]["password_bcrypt"]
+    }
+
+    # UI/API via Gateway API HTTPRoute on the shared traefik-gateway `web` listener. HTTPRoute
+    # lives in `argocd` (same ns as the backend Service → no ReferenceGrant); parentRef crosses
+    # into `traefik` (allowed, listener is from:All). backend_name = the argocd-server Service.
+    # CONFIRMED via `kubectl get svc -n argocd`: chart names it `<release>-argocd-server` →
+    # release `argo-cd` yields `argo-cd-argocd-server` (Service port http:80).
+    routing = {
+      httproutes = [
+        {
+          name              = "argocd"
+          namespace         = "argocd"
+          gateway_name      = "traefik-gateway"
+          gateway_namespace = "traefik"
+          section_name      = "web"
+          hostnames         = ["argocd.k3s.${local.cluster_suffix}"]
+          path_prefix       = "/"
+          backend_name      = "argo-cd-argocd-server"
+          backend_port      = 80
+        }
+      ]
+    }
+  }
+
+  # argocd_img_upd_conf = {
+  #   helm = {
+  #     chart_version = "1.2.4"
+  #     namespace     = "argocd"
+  #     repository    = "https://argoproj.github.io/argo-helm"
+  #     release_name  = "argocd-image-updater"
+  #   }
+  #
+  #   docker = {
+  #     secret_name  = "docker-ex-token"
+  #     organization = dependency.vault-secrets.outputs.secrets["docker/creds"]["username"]
+  #   }
+  #
+  #   common = {
+  #     admin_password = dependency.vault-secrets.outputs.secrets["argocd/creds"]["password"]
+  #   }
+  # }
+  #
+  # Kafka (Bitnami Apache Kafka, KRaft, IN-CLUSTER ONLY). Present ⇒ addons.tf enables the kafka
+  # module. Right-sized for the lab (~1–2Gi free/node): KRaft COMBINED (controllerOnly=false), a
+  # SINGLE controller node, HPA OFF, resourcesPreset=small + heap 512m, 2Gi storage. externalAccess
+  # is DISABLED in the values template — consumers reach the broker via cluster DNS at
+  # kafka.tools.svc.cluster.local:9092. SASL user `admin`, password from Vault kafka/creds.
+  kafka_conf = {
+    helm = {
+      chart_version = "32.4.3"
+
+      namespace = "kafka"
+      # Bitnami charts moved to OCI (Aug-2025 deprecation). Pulling from the OCI registry gets the
+      # self-contained packaged artifact (bundles common@2.31.4) by exact tag — so helm provider
+      # v2.16 installs the bundled deps and never re-resolves the Chart.yaml `common: 2.x.x` OCI range
+      # (which it can't → `invalid_reference: invalid tag`). See the HTTP-repo failure.
+      repository   = "oci://registry-1.docker.io/bitnamicharts"
+      release_name = "kafka"
+    }
+
+    # Single combined KRaft controller/broker. HPA OFF (min/max still render but are inert while
+    # hpa_active=false). 2Gi on the k3s `local-path` StorageClass.
+    controller = {
+      replica_count = 1
+      hpa_active    = false
+      mount_path    = "/bitnami/kafka/controller"
+      size          = "2Gi"
+      min_replicas  = 1
+      max_replicas  = 1
+    }
+
+    # NOTE: no `broker` block. KRaft combined mode uses ONLY the controller pool (controllerOnly=false),
+    # so dedicated brokers are 0 and the values template's broker section stays commented out.
+
+    sasl = {
+      client_username = dependency.vault-secrets.outputs.secrets["kafka/creds"]["clientUsername"]
+      client_password = dependency.vault-secrets.outputs.secrets["kafka/creds"]["clientPassword"]
+    }
+
+    # sc_name = the k3s built-in local-path StorageClass (already the cluster default). The values
+    # template points global.storageClass + controller.persistence.storageClass at it; PVCs bind to
+    # the existing SC (no new StorageClass is created — the chart's sc.yml.tftpl was removed).
+    common = {
+      sc_name = "local-path"
+    }
+  }
+
+  # Redis (Bitnami Redis, STANDALONE, IN-CLUSTER ONLY). Present ⇒ addons.tf enables the redis module.
+  # Right-sized for the lab: a SINGLE master, 0 replicas, resourcesPreset=small, 1Gi PVC on the k3s
+  # `local-path` StorageClass. externalAccess is disabled in the values template — consumers reach
+  # Redis via cluster DNS at redis-redis-master.tools.svc.cluster.local:6379. Auth ON; the `default`
+  # user's password comes from Vault redis/creds. Re-apply vault-secrets BEFORE ops-tools.
+  redis_conf = {
+    helm = {
+      chart_version = "27.0.18"
+
+      namespace    = "redis"
+      repository   = "oci://registry-1.docker.io/bitnamicharts"
+      release_name = "redis"
+    }
+
+    # Single master (standalone). 1Gi on the k3s `local-path` StorageClass.
+    master = {
+      size = "1Gi"
+    }
+
+    # Redis default user is `default`; this password is its AUTH password (from Vault redis/creds).
+    auth = {
+      password = dependency.vault-secrets.outputs.secrets["redis/creds"]["password"]
+    }
+
+    # sc_name = the k3s built-in local-path StorageClass (already the cluster default). The values
+    # template points global.storageClass + master.persistence.storageClass at it; the PVC binds to
+    # the existing SC (no new StorageClass is created — the chart has no sc.yml.tftpl, same as kafka).
+    common = {
+      sc_name = "local-path"
+    }
+  }
+
+}

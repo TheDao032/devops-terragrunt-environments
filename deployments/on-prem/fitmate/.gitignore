@@ -1,0 +1,3 @@
+# Real env files hold secrets — never commit them. Templates (*.bash.example) ARE committed.
+envs/**/*.bash
+!envs/**/*.bash.example

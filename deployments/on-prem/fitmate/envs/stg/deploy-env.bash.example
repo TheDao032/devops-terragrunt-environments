@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+# FITMate on-prem — stg tier env vars, sourced by ../../run.sh before terragrunt runs.
+#
+# ⚠️  SECRETS: copy this file to `deploy-env.bash` (same dir) and fill in the __FILL_ME__ values.
+#     The real deploy-env.bash is gitignored — NEVER commit tokens/keys. Prefer pulling secrets from
+#     a vault / .envrc.local over inlining. (The legacy deployments/utils/envs.sh has committed
+#     plaintext secrets — those should be rotated + removed.)
+
+# ── Kubernetes provider context (ONE shared k3s-fitmate cluster for all tiers) ──
+export TG_KUBE_CTX="k3s-fitmate"                       # matches common.hcl config_context
+# export TG_KUBE_HOST="https://192.168.105.11:6443"    # or rely on ~/.kube/config + TG_KUBE_CTX
+# export TG_KUBE_CLIENT_CERT_DATA="<base64>"
+# export TG_KUBE_CLIENT_KEY_DATA="<base64>"
+# export TG_KUBE_CLUSTER_CA_CERT_DATA="<base64>"
+
+# ── Vault (provider + the exclude health-gate; ingress must resolve from THIS host) ──
+export VAULT_ADDR="http://vault.k3s.fitmate"           # /etc/hosts: <node-ip> vault.k3s.fitmate
+export VAULT_TOKEN="__FILL_ME__"                       # age -d … vault-init.age | jq -r .root_token
+
+# ── PostgreSQL / Citus (database units) ──
+export PG_HOST="192.168.105.10"
+export PG_PORT="5432"
+export PG_SUPERUSER="tf_admin"
+export PG_ADMIN_PASSWORD="__FILL_ME__"
+export PG_SSH_USER="packer"
+export PG_SSH_OPTS="-i ~/.ssh/lab_ed25519 -o StrictHostKeyChecking=accept-new -o BatchMode=yes"
+
+# ── Keycloak (realm units + their health-gate) ──
+export KEYCLOAK_URL="http://keycloak.k3s.fitmate"      # /etc/hosts: <node-ip> keycloak.k3s.fitmate
+export KEYCLOAK_USER="admin"
+export KEYCLOAK_PASSWORD="__FILL_ME__"
+
+# ── GitHub / GHCR (gitops + per-app ghcr-pull) ──
+export GITHUB_USERNAME="TheDao032"
+export GITHUB_TOKEN="__FILL_ME__"                      # read:packages (+ repo scope for gitops)
+
+# ── Docker / Artifactory (platform creds) ──
+export DOCKER_REGISTRY="https://index.docker.io/v1/"
+export DOCKER_USERNAME="nthedao"
+export DOCKER_TOKEN="__FILL_ME__"
+export DOCKER_EMAIL="nthedao2705@gmail.com"
+export ARTIFACTORY_REGISTRY="nthedao"
+
+# ── Cloudflare (prod edge units only: cloudflare-access/tunnel/cloudflared) ──
+export CLOUDFLARE_API_TOKEN="__FILL_ME__"

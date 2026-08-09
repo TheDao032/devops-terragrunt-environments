@@ -1,193 +1,82 @@
-# Set common variables for the region. This is automatically pulled in in the root terragrunt.hcl configuration to
-# configure the remote state bucket and pass forward to the child modules as inputs.
+# PER-ENV (stg) tier — one of dev/stg/prod on the shared fitmate k3s cluster.
+#
+# `secrets` here = APP-level secrets only, seeded into the shared Vault KV at fitmate/data/<env>/*
+# (path_prefix "<env>/"). PLATFORM secrets (docker/github/argocd/kafka/redis/keycloak-admin) live in
+# shared/env.hcl → fitmate/data/platform/*. DB + role names are env-suffixed (<svc>_<env>) so one PG
+# server can host dev/stg/prod side by side. App namespaces: fitmate-<svc> (prod) / fitmate-<svc>-<env> (dev,stg).
 locals {
-  # vault_config_vars = read_terragrunt_config(find_in_parent_folders("vault.hcl"))
-  # vault_address     = local.vault_config_vars.locals.address
-  # vault_token       = local.vault_config_vars.locals.token
-
-  backend_vars            = read_terragrunt_config(find_in_parent_folders("backend.hcl"))
-  backend_docker_registry = local.backend_vars.locals.docker_registry
-  backend_docker_username = local.backend_vars.locals.docker_username
-  backend_docker_token    = local.backend_vars.locals.docker_token
-  backend_docker_email    = local.backend_vars.locals.docker_email
-
-  backend_gitops_url   = local.backend_vars.locals.gitops_url
-  backend_ssh_priv_key = local.backend_vars.locals.ssh_private_key
-
-  backend_github_token    = local.backend_vars.locals.github_token
+  # Only the GitHub token is needed here (per-app GHCR image-pull creds). Other backend platform
+  # values (docker/gitops/artifactory) are consumed by shared/, not per env.
+  backend_vars            = read_terragrunt_config(find_in_parent_folders("common.hcl"))
   backend_github_username = local.backend_vars.locals.github_username
-
-  backend_artifactory_registry = local.backend_vars.locals.artifactory_registry
+  backend_github_token    = local.backend_vars.locals.github_token
 
   org_vars       = read_terragrunt_config(find_in_parent_folders("org.hcl"))
   org_infras_org = local.org_vars.locals.infras_organization
 
   environment  = "prod"
-  cluster_name = "prod"
+  cluster_name = "fitmate"
+
+  # Cloudflare API token for the PROD-ONLY edge units (cloudflare-tunnel / cloudflare-access, read as
+  # local.environment_vars.locals.cloudflare_api_token). From the CLOUDFLARE_API_TOKEN env
+  # (.envrc.local / deploy-env.bash). prod diverges from the shared per-env template here because it
+  # is the only tier that carries the edge stack — this was dropped when env.hcl was regenerated.
+  cloudflare_api_token = get_env("CLOUDFLARE_API_TOKEN", "")
+
+  # Realm name for this env on the shared Keycloak (matches keycloak/fitmate unit): fitmate-<env>,
+  # or plain `fitmate` for prod. Used to build the per-service token issuer/JWKS URLs below.
+  realm_name = local.environment == "prod" ? "fitmate" : "fitmate-${local.environment}"
+
+  # Browser-facing issuer host (must equal token `iss`). prod is exposed publicly via Cloudflare
+  # (auth.fitmate.me); dev/stg use the in-cluster Traefik host. JWKS always uses the in-cluster
+  # Service URL (pods can't resolve the ingress host).
+  issuer_host = local.environment == "prod" ? "https://auth.fitmate.me" : "http://keycloak.k3s.fitmate"
 
   secrets = {
-    "artifactory/params" = {
-      registry = local.backend_artifactory_registry
-    }
+    # ── Per-app GHCR image-pull creds (value = the GitHub read:packages PAT). Per-env folder so each
+    #    app's fitmate-<svc>-<env>-eso role can read its own copy. Add a line per image-pulling app.
+    "trainee/ghcr-pull" = { username = local.backend_github_username, token = local.backend_github_token }
+    "website/ghcr-pull" = { username = local.backend_github_username, token = local.backend_github_token }
 
-    "docker/creds" = {
-      username = local.backend_docker_username
-      password = local.backend_docker_token
-      email    = local.backend_docker_email
-    }
-
-    "docker/params" = {
-      registry = local.backend_docker_registry
-    }
-
-    "github/params" = {
-      # fitmate-gitops lives under the FITMate-Platform org (private, HTTPS) — the canonical GitOps repo
-      # (ADR-032). NOT the shared backend gitops_url (git@github.com:TheDao032/gitops-apps), which is the
-      # retired repo. HTTPS because the new repo is a different org; ArgoCD auths via PAT (github/creds).
-      url         = "https://github.com/FITMate-Platform"
-      gitops_repo = "fitmate-gitops"
-      insecure    = "false"
-      enablelfs   = "false"
-    }
-
-    "github/creds" = {
-      ssh_priv_key = local.backend_ssh_priv_key
-      username     = local.backend_github_username
-      token        = local.backend_github_token
-    }
-
-    # GHCR image-pull credentials, PER APP (SCRUM-191). Each app's ESO ExternalSecret (in ns
-    # fitmate-<app>, via the fitmate-<app>-eso k8s-auth role) reads {username, token} from here and
-    # renders a dockerconfigjson `ghcr-pull` Secret → imagePullSecrets, so pods can pull private
-    # ghcr.io/fitmate-platform/* images. Per-app path (NOT a shared one): the per-app Vault roles are
-    # read-scoped to fitmate/data/local/<app>/* only, so a shared path would be unreadable by them.
-    # token needs read:packages (the github PAT already has it); for prod, use a dedicated
-    # read:packages-only token instead of reusing the repo PAT.
-    "trainee/ghcr-pull" = {
-      username = local.backend_github_username
-      token    = local.backend_github_token
-    }
-    "website/ghcr-pull" = {
-      username = local.backend_github_username
-      token    = local.backend_github_token
-    }
-
-    "argocd/params" = {
-    }
-
-    "argocd/creds" = {
-      username = "admin"
-      password = "{ _RANDOM_ = 18 }"
-    }
-
-    # PostgreSQL/Citus (on-prem, NOT k8s) — consumed by the `database` unit.
-    # superuser (tf_admin) is the role the cyrilgdn provider LOGS IN as, so its password must
-    # be a STABLE, pre-provisioned value (NOT _RANDOM_): the same PG_ADMIN_PASSWORD is used to
-    # create the role in the citus-docker entrypoint AND stored here for the module to read.
+    # ── PostgreSQL superuser (tf_admin) — ONE PG server backs all envs, so this is the same stable
+    #    value everywhere (also in shared/env.hcl for the keycloak DB). Read by this env's database units.
     "database/superuser/creds" = {
       username = "tf_admin"
       password = get_env("PG_ADMIN_PASSWORD", "change-me-tf-admin")
     }
-    # Per-application-service DB roles. app (read-write, owns the db) / ro (read-only). app/ro are
-    # CREATED by the database module, so _RANDOM_ is fine — Vault is the source of truth and the
-    # module sets each role's password to what lands here. Keys grouped per service:
-    # database/<service>/<role>/creds. Real FITMate services with Postgres (6 Go services):
-    #   trainee
-    "database/trainee/app/creds" = { username = "trainee_prod_app", password = "{ _RANDOM_ = 18 }" } # prod-suffixed (shared Postgres, no collision w/ local)
-    "database/trainee/ro/creds"  = { username = "trainee_prod_ro", password = "{ _RANDOM_ = 18 }" }
-    #   trainer
-    "database/trainer/app/creds" = { username = "trainer_app", password = "{ _RANDOM_ = 18 }" }
-    "database/trainer/ro/creds"  = { username = "trainer_ro", password = "{ _RANDOM_ = 18 }" }
-    #   booking
-    "database/booking/app/creds" = { username = "booking_app", password = "{ _RANDOM_ = 18 }" }
-    "database/booking/ro/creds"  = { username = "booking_ro", password = "{ _RANDOM_ = 18 }" }
-    #   inquiry
-    "database/inquiry/app/creds" = { username = "inquiry_app", password = "{ _RANDOM_ = 18 }" }
-    "database/inquiry/ro/creds"  = { username = "inquiry_ro", password = "{ _RANDOM_ = 18 }" }
-    #   admin
-    "database/admin/app/creds" = { username = "admin_app", password = "{ _RANDOM_ = 18 }" }
-    "database/admin/ro/creds"  = { username = "admin_ro", password = "{ _RANDOM_ = 18 }" }
-    #   payment — WRITE-ONLY today (config/prod minimal, gateway unbuilt) → app role only, no ro
-    "database/payment/app/creds" = { username = "payment_app", password = "{ _RANDOM_ = 18 }" }
-    #   keycloak — its own db + owner role (runs its OWN schema migrations → full DDL, no ro).
-    #   Connects DIRECT to :5432 (NOT pgbouncer transaction pooling — breaks its advisory locks).
-    "database/keycloak/app/creds" = { username = "keycloak_app", password = "{ _RANDOM_ = 18 }" }
 
-    # Keycloak master-realm BOOTSTRAP ADMIN (CR spec.bootstrapAdmin) — a Keycloak user, SEPARATE from
-    # the keycloak_app DB role above. Replaces the operator's auto-generated temp-admin.
-    "keycloak/admin/creds" = { username = "admin", password = "{ _RANDOM_ = 20 }" }
+    # ── Per-env app DB roles. Usernames are env-suffixed to match the database units' role names
+    #    (separate DB per env: <svc>_<env> databases owned by <svc>_app_<env>). Passwords → Vault.
+    "database/trainee/app/creds" = { username = "trainee_app_${local.environment}", password = "{ _RANDOM_ = 18 }" }
+    "database/trainee/ro/creds"  = { username = "trainee_ro_${local.environment}", password = "{ _RANDOM_ = 18 }" }
+    "database/trainer/app/creds" = { username = "trainer_app_${local.environment}", password = "{ _RANDOM_ = 18 }" }
+    "database/trainer/ro/creds"  = { username = "trainer_ro_${local.environment}", password = "{ _RANDOM_ = 18 }" }
+    "database/booking/app/creds" = { username = "booking_app_${local.environment}", password = "{ _RANDOM_ = 18 }" }
+    "database/booking/ro/creds"  = { username = "booking_ro_${local.environment}", password = "{ _RANDOM_ = 18 }" }
+    "database/inquiry/app/creds" = { username = "inquiry_app_${local.environment}", password = "{ _RANDOM_ = 18 }" }
+    "database/inquiry/ro/creds"  = { username = "inquiry_ro_${local.environment}", password = "{ _RANDOM_ = 18 }" }
+    "database/admin/app/creds"   = { username = "admin_app_${local.environment}", password = "{ _RANDOM_ = 18 }" }
+    "database/admin/ro/creds"    = { username = "admin_ro_${local.environment}", password = "{ _RANDOM_ = 18 }" }
+    # payment — WRITE-ONLY today (gateway unbuilt) → app role only, no ro.
+    "database/payment/app/creds" = { username = "payment_app_${local.environment}", password = "{ _RANDOM_ = 18 }" }
 
-    # Keycloak realm seed users — e2e test creds for the fitmate realm (keycloak/<realm>/<user>/creds).
+    # ── Keycloak realm seed user (per-env realm) — e2e password-grant fixture.
     "keycloak/fitmate/trainee1/creds" = { username = "trainee1", password = "{ _RANDOM_ = 16 }" }
 
-    # ── Keycloak token-validation config for backend services (NON-secret; issuer/audience/JWKS) ──
-    # ESO syncs fitmate/prod/trainee/params → a trainee-keycloak Secret (role fitmate-trainee-prod-eso,
-    # mountPath kubernetes-prod). Env-var names verified against fitmate-trainee-service KeycloakConfig.
-    #   ISSUER  : the PUBLIC browser-facing host (auth.fitmate.me) — MUST equal the token `iss`.
-    #   JWKSURL : the IN-CLUSTER Service URL (shared Keycloak) — pods use this; the issuer/JWKS split.
-    # ⚠️ DEPENDS ON Phase 5 ([[production-cloudflare-tunnel]]): prod REUSES local's Keycloak, whose CR
-    # hostname is currently PINNED to keycloak.k3s.local — so tokens still carry iss=keycloak.k3s.local
-    # until KC's hostname is made dynamic/multi-host (or the prod realm gets auth.fitmate.me as its
-    # frontend URL). This issuer WON'T validate until then. MVP: only trainee migrated.
+    # ── Per-service Keycloak token-validation config (NON-secret; issuer/audience/JWKS). ESO syncs
+    #    each <svc>/params into a <svc>-keycloak Secret the service reads. ISSUER = the browser-facing
+    #    host (must equal token `iss`); JWKSURL = the in-cluster Service (pods can't resolve the host).
+    #    Realm is per-env (local.realm_name). MVP: only trainee migrated; fan out per service in Phase 2.
     "trainee/params" = {
-      KEYCLOAK_ISSUER   = "https://auth.fitmate.me/realms/fitmate"
+      KEYCLOAK_ISSUER   = "${local.issuer_host}/realms/${local.realm_name}"
       KEYCLOAK_AUDIENCE = "fitmate-backend"
-      KEYCLOAK_JWKSURL  = "http://keycloak-service.keycloak.svc.cluster.local:8080/realms/fitmate/protocol/openid-connect/certs"
+      KEYCLOAK_JWKSURL  = "http://keycloak-service.keycloak.svc.cluster.local:8080/realms/${local.realm_name}/protocol/openid-connect/certs"
     }
-
-    # "jenkins/creds" = {
-    #   username = "admin"
-    #   password = "{ _RANDOM_ = 18 }"
-    # }
-    #
-    # "grafana/creds" = {
-    #   username = "admin"
-    #   password = "{ _RANDOM_ = 18 }"
-    # }
-    #
-    # "loki/creds" = {
-    #   username = "admin"
-    #   password = "{ _RANDOM_ = 18 }"
-    # }
-    #
-    # "kafka/creds" = {
-    #   clientUsername = "admin"
-    #   clientPassword = "{ _RANDOM_ = 18 }"
-    # }
-
-    # Commented until Vault is deployed + initialized — vault_address / vault_token
-    # come from vault.hcl (uncommented above at that stage).
-    # "vault/params" = {
-    #   clusterAddr = local.vault_address
-    # }
-    #
-    # "vault/creds" = {
-    #   rootToken = local.vault_token
-    # }
-
-    # "database/params" = {
-    #   DBClusterEndpoint = get_env("DB_CLUSTER_ENDPOINT", "192.168.56.31")
-    #   DBClusterPort     = 5432
-    # }
-    #
-    # "database/admin-service/creds" = {
-    #   username = "fiesta"
-    #   password = "{ _RANDOM_ = 18 }"
-    #   database = "fiesta"
-    # }
-
-    # "podRestartCollector/creds" = {
-    #   slackWebhookUrl = get_env("SLACK_WEBHOOK_URL", "")
-    # }
   }
-
-  # cloudflare_api_token = get_env("CLOUDFLARE_API_TOKEN", "")
 
   tags = {
-    created_by    = "terraform"
-    environment   = local.environment
-    organiazation = local.org_infras_org
+    created_by   = "terraform"
+    environment  = local.environment
+    organization = local.org_infras_org
   }
-
-
 }
