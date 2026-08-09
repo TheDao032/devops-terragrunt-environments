@@ -22,7 +22,7 @@ locals {
   # vault_token       = local.vault_config_vars.locals.token
 
   # Backend global vars
-  # backend_vars      = read_terragrunt_config(find_in_parent_folders("backend.hcl"))
+  # backend_vars      = read_terragrunt_config(find_in_parent_folders("common.hcl"))
   # backend_hostname  = local.backend_vars.locals.hostname
   # backend_org       = local.backend_vars.locals.organization
   # backend_workspace = local.backend_vars.locals.workspaces_name

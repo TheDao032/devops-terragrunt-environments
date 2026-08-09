@@ -24,3 +24,8 @@
 # HCP Terraform API token — auth to app.terraform.io (org nthedao_org) for the remote backend.
 # Create at: HCP → User Settings → Tokens. See docs/hcp-terraform-backend.md.
 export TF_TOKEN_app_terraform_io="REPLACE_WITH_YOUR_HCP_API_TOKEN"
+
+# Cloudflare API token — for the `cloudflare-tunnel` terragrunt unit (fitmate.me production domain).
+# Permissions: Zone:DNS:Edit, Account:Cloudflare Tunnel:Edit, Account:Access: Apps and Policies:Edit,
+# Zone:Zone:Read — scoped to the fitmate.me zone. Create at: https://dash.cloudflare.com/profile/api-tokens
+# export CLOUDFLARE_API_TOKEN="REPLACE_WITH_YOUR_CLOUDFLARE_API_TOKEN"

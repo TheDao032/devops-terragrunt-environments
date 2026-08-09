@@ -22,7 +22,7 @@ locals {
   vault_token       = local.vault_config_vars.locals.token
 
   # Backend global vars
-  backend_vars      = read_terragrunt_config(find_in_parent_folders("backend.hcl"))
+  backend_vars      = read_terragrunt_config(find_in_parent_folders("common.hcl"))
   backend_hostname  = local.backend_vars.locals.hostname
   backend_org       = local.backend_vars.locals.organization
   backend_workspace = local.backend_vars.locals.workspaces_name
@@ -47,19 +47,19 @@ generate "versions" {
       required_providers {
         helm = {
           source  = "hashicorp/helm"
-          version = "~> 2.16.0"
+          version = "~> 3.2.0"
         }
         kubernetes = {
           source  = "hashicorp/kubernetes"
-          version = "~> 2.25.0"
+          version = "~> 3.2.1"
         }
         kubectl = {
           source  = "alekc/kubectl"
-          version = "~> 2.1.3"
+          version = "~> 2.4.1"
         }
         vault = {
           source = "hashicorp/vault"
-          version = "~> 4.4.0"
+          version = "~> 5.10.1"
         }
       }
     }
