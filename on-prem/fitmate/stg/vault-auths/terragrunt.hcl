@@ -91,6 +91,7 @@ inputs = {
           metadata_capabilities = "read,list"
           delete_capabilities   = "deny"
           destroy_capabilities  = "deny"
+          absolute              = true # cross-tier: fitmate/data/platform/kafka/* (NOT env-prefixed)
         },
         {
           path                  = "platform/redis/*" # shared Redis auth
@@ -98,6 +99,7 @@ inputs = {
           metadata_capabilities = "read,list"
           delete_capabilities   = "deny"
           destroy_capabilities  = "deny"
+          absolute              = true # cross-tier: fitmate/data/platform/redis/* (NOT env-prefixed)
         }
       ]
     }
