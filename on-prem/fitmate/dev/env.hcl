@@ -65,6 +65,12 @@ locals {
       KEYCLOAK_ISSUER   = "${local.issuer_host}/realms/${local.realm_name}"
       KEYCLOAK_AUDIENCE = "fitmate-backend"
       KEYCLOAK_JWKSURL  = "http://keycloak-service.keycloak.svc.cluster.local:8080/realms/${local.realm_name}/protocol/openid-connect/certs"
+      # DB DSNs — composed by vault-secrets: the `{{...:password}}` token is replaced with the
+      # generated password of the sibling creds secret (kept in trainee/* so the app's own ESO role
+      # can read it). host/db/user match the dev database/trainee unit (db trainee_<env>, owner
+      # trainee_app_<env>). PG is the external LAN host (192.168.105.10) — pods must route to it.
+      DATABASE_WRITE_DB_CONNECTION_STRING = "postgresql://trainee_app_${local.environment}:{{database/trainee/app/creds:password}}@192.168.105.10:5432/trainee_${local.environment}?sslmode=disable"
+      DATABASE_READ_DB_CONNECTION_STRING  = "postgresql://trainee_ro_${local.environment}:{{database/trainee/ro/creds:password}}@192.168.105.10:5432/trainee_${local.environment}?sslmode=disable"
     }
   }
 
