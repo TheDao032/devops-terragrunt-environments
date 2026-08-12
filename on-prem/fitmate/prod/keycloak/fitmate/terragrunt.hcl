@@ -2,7 +2,7 @@ locals {
   environment_vars = read_terragrunt_config(find_in_parent_folders("env.hcl"))
   environment      = local.environment_vars.locals.environment
 
-  keycloak_url = get_env("KEYCLOAK_URL", "http://keycloak.k3s.prod")
+  keycloak_url = get_env("KEYCLOAK_URL", "http://keycloak.k3s.fitmate")
 }
 
 terraform {
@@ -34,10 +34,8 @@ include "root" {
   path = find_in_parent_folders("root.hcl")
 }
 
-include "vault" {
-  path = find_in_parent_folders("vault.hcl")
-}
-
+# Vault provider now comes FROM keycloak.hcl (combined realm partial). Do NOT include vault.hcl here, or
+# you get duplicate required_providers + a provider-vault.tf generate-path clash.
 include "keycloak" {
   path = find_in_parent_folders("keycloak.hcl")
 }
@@ -49,7 +47,7 @@ inputs = {
     name         = "fitmate"
     enabled      = true
     display_name = "FITMate"
-    ssl_required = "none" # HTTP lab: Keycloak reached at http://keycloak.k3s.prod via Traefik
+    ssl_required = "none" # HTTP lab: Keycloak reached at http://keycloak.k3s.fitmate via Traefik
 
     # Services gate on realm_access.roles.
     # NOTE: role is "administrator", NOT "admin" — Keycloak 26.4.0+ has an FGAP regression that blocks

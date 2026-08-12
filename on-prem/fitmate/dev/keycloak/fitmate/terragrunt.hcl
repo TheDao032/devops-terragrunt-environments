@@ -34,10 +34,8 @@ include "root" {
   path = find_in_parent_folders("root.hcl")
 }
 
-include "vault" {
-  path = find_in_parent_folders("vault.hcl")
-}
-
+# Vault provider now comes FROM keycloak.hcl (combined realm partial). Do NOT include vault.hcl here, or
+# you get duplicate required_providers + a provider-vault.tf generate-path clash.
 include "keycloak" {
   path = find_in_parent_folders("keycloak.hcl")
 }

@@ -31,6 +31,7 @@ locals {
     #    app's fitmate-<svc>-<env>-eso role can read its own copy. Add a line per image-pulling app.
     "trainee/ghcr-pull" = { username = local.backend_github_username, token = local.backend_github_token }
     "website/ghcr-pull" = { username = local.backend_github_username, token = local.backend_github_token }
+    "trainer/ghcr-pull" = { username = local.backend_github_username, token = local.backend_github_token }
 
     # ── PostgreSQL superuser (tf_admin) — ONE PG server backs all envs, so this is the same stable
     #    value everywhere (also in shared/env.hcl for the keycloak DB). Read by this env's database units.
@@ -71,6 +72,18 @@ locals {
       # trainee_app_<env>). PG is the external LAN host (192.168.105.10) — pods must route to it.
       DATABASE_WRITE_DB_CONNECTION_STRING = "postgresql://trainee_app_${local.environment}:{{database/trainee/app/creds:password}}@192.168.105.10:5432/trainee_${local.environment}?sslmode=disable"
       DATABASE_READ_DB_CONNECTION_STRING  = "postgresql://trainee_ro_${local.environment}:{{database/trainee/ro/creds:password}}@192.168.105.10:5432/trainee_${local.environment}?sslmode=disable"
+    }
+
+    # ── trainer-service (IN-6): mirrors trainee/params. Keycloak token-validation config + DB DSNs.
+    #    DB creds (database/trainer/app|ro/creds) already seeded above; the {{...:password}} token embeds
+    #    the generated pw. DB trainer_<env> owned by trainer_app_<env> is provisioned by the dev/database
+    #    unit (IN-7). PG on the external LAN host (192.168.105.10).
+    "trainer/params" = {
+      KEYCLOAK_ISSUER   = "${local.issuer_host}/realms/${local.realm_name}"
+      KEYCLOAK_AUDIENCE = "fitmate-backend"
+      KEYCLOAK_JWKSURL  = "http://keycloak-service.keycloak.svc.cluster.local:8080/realms/${local.realm_name}/protocol/openid-connect/certs"
+      DATABASE_WRITE_DB_CONNECTION_STRING = "postgresql://trainer_app_${local.environment}:{{database/trainer/app/creds:password}}@192.168.105.10:5432/trainer_${local.environment}?sslmode=disable"
+      DATABASE_READ_DB_CONNECTION_STRING  = "postgresql://trainer_ro_${local.environment}:{{database/trainer/ro/creds:password}}@192.168.105.10:5432/trainer_${local.environment}?sslmode=disable"
     }
   }
 
