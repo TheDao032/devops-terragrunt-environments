@@ -118,7 +118,7 @@ inputs = {
       # admin-service's Admin-API client secret → ESO → the fitmate-admin-<env> namespace.
       # Its OWN path (not admin/params): vault_kv_secret_v2 manages a path's whole data map, so
       # writing into admin/params would clobber every other param key.
-      "fitmate-admin-backend" = { path = "prod/admin/keycloak/creds", key = "KEYCLOAK_CLIENT_SECRET" }
+      "fitmate-admin-backend" = { path = "prod/admin/keycloak/creds", key = "KEYCLOAK_CLIENTSECRET" }
     }
   }
 }
