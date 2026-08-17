@@ -29,6 +29,21 @@ locals {
   vault_token   = get_env("VAULT_TOKEN", "")
 }
 
+generate "vault_versions" {
+  path      = "vault-versions.tf"
+  if_exists = "overwrite_terragrunt"
+  contents  = <<EOF
+terraform {
+  required_providers {
+    vault = {
+      source  = "hashicorp/vault"
+      version = "~> 5.10.1"
+    }
+  }
+}
+EOF
+}
+
 generate "vault_provider" {
   path      = "provider-vault.tf"
   if_exists = "overwrite_terragrunt"

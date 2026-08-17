@@ -36,6 +36,10 @@ include "root" {
   path = find_in_parent_folders("root.hcl")
 }
 
+include "vault" {
+  path = find_in_parent_folders("vault.hcl")
+}
+
 inputs = {
   # Overrides variables from env.hcl
   secrets = merge(

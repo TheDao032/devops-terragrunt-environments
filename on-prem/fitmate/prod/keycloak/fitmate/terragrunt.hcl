@@ -2,7 +2,7 @@ locals {
   environment_vars = read_terragrunt_config(find_in_parent_folders("env.hcl"))
   environment      = local.environment_vars.locals.environment
 
-  keycloak_url = get_env("KEYCLOAK_URL", "http://keycloak.k3s.prod")
+  keycloak_url = get_env("KEYCLOAK_URL", "http://keycloak.k3s.fitmate")
 }
 
 terraform {
@@ -34,6 +34,8 @@ include "root" {
   path = find_in_parent_folders("root.hcl")
 }
 
+# Vault provider now comes FROM keycloak.hcl (combined realm partial). Do NOT include vault.hcl here, or
+# you get duplicate required_providers + a provider-vault.tf generate-path clash.
 include "keycloak" {
   path = find_in_parent_folders("keycloak.hcl")
 }
@@ -45,7 +47,7 @@ inputs = {
     name         = "fitmate"
     enabled      = true
     display_name = "FITMate"
-    ssl_required = "none" # HTTP lab: Keycloak reached at http://keycloak.k3s.prod via Traefik
+    ssl_required = "none" # HTTP lab: Keycloak reached at http://keycloak.k3s.fitmate via Traefik
 
     # Services gate on realm_access.roles.
     # NOTE: role is "administrator", NOT "admin" — Keycloak 26.4.0+ has an FGAP regression that blocks
@@ -65,6 +67,23 @@ inputs = {
         valid_post_logout_redirect_uris = ["http://localhost:3000"]
         web_origins                     = ["http://localhost:3000"]
         # CRITICAL: backend services require aud contains fitmate-backend (Keycloak default aud = account).
+        audiences = ["fitmate-backend"]
+      },
+      {
+        # ── admin-service backend (B-047 / Keycloak cutover) ──────────────────────────────────
+        # A MACHINE identity, not a browser client: admin-service calls the Keycloak ADMIN REST API
+        # as itself (client_credentials) to create admins and assign realm roles. No user ever logs
+        # in through it, hence standard_flow/direct_grants OFF.
+        client_id                    = "fitmate-admin-backend"
+        name                         = "FITMate Admin Service (backend)"
+        access_type                  = "CONFIDENTIAL" # issues the client_secret pushed to Vault below
+        standard_flow_enabled        = false          # never used in a browser
+        direct_access_grants_enabled = false          # no password grant
+        service_accounts_enabled     = true           # THE machine identity
+        # Least privilege: create/read users + assign realm roles. Deliberately NOT "realm-admin",
+        # which is full control of the realm — a leaked secret would then own the whole IdP.
+        service_account_roles = ["manage-users", "view-users"]
+        # Its own tokens must carry aud=fitmate-backend like every other client (KC default is `account`).
         audiences = ["fitmate-backend"]
       },
     ]
@@ -95,7 +114,11 @@ inputs = {
     enabled = true
     mount   = "fitmate"
     clients = {
-      "fitmate-website" = { path = "local/website/creds", key = "AUTH_KEYCLOAK_SECRET" }
+      "fitmate-website" = { path = "prod/website/creds", key = "AUTH_KEYCLOAK_SECRET" }
+      # admin-service's Admin-API client secret → ESO → the fitmate-admin-<env> namespace.
+      # Its OWN path (not admin/params): vault_kv_secret_v2 manages a path's whole data map, so
+      # writing into admin/params would clobber every other param key.
+      "fitmate-admin-backend" = { path = "prod/admin/keycloak/creds", key = "KEYCLOAK_CLIENT_SECRET" }
     }
   }
 }

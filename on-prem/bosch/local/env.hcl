@@ -5,7 +5,7 @@ locals {
   vault_address     = local.vault_config_vars.locals.address
   vault_token       = local.vault_config_vars.locals.token
 
-  backend_vars            = read_terragrunt_config(find_in_parent_folders("backend.hcl"))
+  backend_vars            = read_terragrunt_config(find_in_parent_folders("common.hcl"))
   backend_docker_registry = local.backend_vars.locals.docker_registry
   backend_docker_username = local.backend_vars.locals.docker_username
   backend_docker_token    = local.backend_vars.locals.docker_token

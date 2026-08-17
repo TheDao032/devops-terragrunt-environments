@@ -20,6 +20,10 @@ include "root" {
   path = find_in_parent_folders("root.hcl")
 }
 
+include "vault" {
+  path = find_in_parent_folders("vault.hcl")
+}
+
 inputs = {
   # Overrides variables from env.hcl
   # vault_mount_path = dependency.vault-secrets.outputs.vault_mount_path

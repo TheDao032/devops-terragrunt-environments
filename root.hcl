@@ -5,18 +5,10 @@
 # ---------------------------------------------------------------------------------------------------------------------
 
 locals {
-  # Kube provider config now lives in the shared backend.hcl (was per-tenant kube-config.hcl).
-  kube_host           = local.backend_vars.locals.host
-  kube_config_path    = local.backend_vars.locals.config_path
-  kube_config_context = local.backend_vars.locals.config_context
-
-  client_key             = local.backend_vars.locals.client_key
-  client_certificate     = local.backend_vars.locals.client_certificate
-  cluster_ca_certificate = local.backend_vars.locals.cluster_ca_certificate
-  token                  = local.backend_vars.locals.token
-
-  # Backend global vars (+ kube provider config, consolidated here)
-  backend_vars      = read_terragrunt_config(find_in_parent_folders("backend.hcl"))
+  # Providers are split into per-provider partials (on-prem/{kube,vault,postgresql,keycloak}.hcl);
+  # each stack includes only the ones it needs. This root no longer generates the kube provider, so
+  # the kube connection locals moved out (they live in kube.hcl now).
+  backend_vars      = read_terragrunt_config(find_in_parent_folders("common.hcl"))
   backend_hostname  = local.backend_vars.locals.hostname
   backend_org       = local.backend_vars.locals.tf_organization
   backend_workspace = local.backend_vars.locals.tf_workspaces_name
@@ -34,74 +26,18 @@ locals {
   environment      = local.environment_vars.locals.environment
 }
 
-# Generate providers
+# required_version ONLY. Provider requirements + configs are split into per-provider partials that
+# each stack includes as needed (Terraform merges required_providers across terraform{} blocks):
+#   on-prem/kube.hcl (kubernetes+helm+kubectl) · vault.hcl · postgresql.hcl · keycloak.hcl
+# Every on-prem stack (fitmate + bosch + renesas) now initializes ONLY the providers it includes.
+# aws stacks declare the aws provider within their own tree.
 generate "versions" {
   path      = "versions.tf"
   if_exists = "overwrite_terragrunt"
   contents  = <<EOF
-    terraform {
-      required_version = ">= 1.11.2, < 2.0.0"
-
-      required_providers {
-        helm = {
-          source  = "hashicorp/helm"
-          version = "~> 2.16.0"
-        }
-        kubernetes = {
-          source  = "hashicorp/kubernetes"
-          version = "~> 2.25.0"
-        }
-        kubectl = {
-          source  = "alekc/kubectl"
-          version = "~> 2.1.3"
-        }
-        vault = {
-          source = "hashicorp/vault"
-          version = "~> 4.4.0"
-        }
-        postgresql = {
-          source  = "cyrilgdn/postgresql"
-          version = "~> 1.22"
-        }
-        keycloak = {
-          source  = "keycloak/keycloak"
-          version = "~> 5.8"
-        }
-      }
-    }
-EOF
+terraform {
+  required_version = ">= 1.11.2, < 2.0.0"
 }
-
-# Generate Kube providers
-generate "provider" {
-  path      = "provider-kube.tf"
-  if_exists = "overwrite_terragrunt"
-  contents  = <<EOF
-    provider "kubernetes" {
-      host                   = "${local.kube_host}"
-      client_key             = base64decode("${local.client_key}")
-      client_certificate     = base64decode("${local.client_certificate}")
-      cluster_ca_certificate = base64decode("${local.cluster_ca_certificate}")
-    }
-
-    provider "helm" {
-      kubernetes {
-        host                   = "${local.kube_host}"
-        client_key             = base64decode("${local.client_key}")
-        client_certificate     = base64decode("${local.client_certificate}")
-        cluster_ca_certificate = base64decode("${local.cluster_ca_certificate}")
-      }
-    }
-
-    provider "kubectl" {
-      apply_retry_count      = 3
-      load_config_file       = false
-
-      host                   = "${local.kube_host}"
-      client_key             = base64decode("${local.client_key}")
-      client_certificate     = base64decode("${local.client_certificate}")
-      cluster_ca_certificate = base64decode("${local.cluster_ca_certificate}")
-    }
 EOF
 }
 

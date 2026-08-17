@@ -41,6 +41,10 @@ include "root" {
   path = find_in_parent_folders("root.hcl")
 }
 
+include "kube" {
+  path = find_in_parent_folders("kube.hcl")
+}
+
 inputs = {
   local = {
     secret = merge(local.vault_config, {

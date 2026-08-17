@@ -33,6 +33,10 @@ include "root" {
   path = find_in_parent_folders("root.hcl")
 }
 
+include "kube" {
+  path = find_in_parent_folders("kube.hcl")
+}
+
 inputs = {
   chart_version        = "65.1.0"
   namespace            = "monitoring"
