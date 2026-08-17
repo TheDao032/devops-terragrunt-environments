@@ -71,6 +71,23 @@ inputs = {
         # CRITICAL: backend services require aud contains fitmate-backend (Keycloak default aud = account).
         audiences = ["fitmate-backend"]
       },
+      {
+        # ── admin-service backend (B-047 / Keycloak cutover) ──────────────────────────────────
+        # A MACHINE identity, not a browser client: admin-service calls the Keycloak ADMIN REST API
+        # as itself (client_credentials) to create admins and assign realm roles. No user ever logs
+        # in through it, hence standard_flow/direct_grants OFF.
+        client_id                    = "fitmate-admin-backend"
+        name                         = "FITMate Admin Service (backend)"
+        access_type                  = "CONFIDENTIAL" # issues the client_secret pushed to Vault below
+        standard_flow_enabled        = false          # never used in a browser
+        direct_access_grants_enabled = false          # no password grant
+        service_accounts_enabled     = true           # THE machine identity
+        # Least privilege: create/read users + assign realm roles. Deliberately NOT "realm-admin",
+        # which is full control of the realm — a leaked secret would then own the whole IdP.
+        service_account_roles = ["manage-users", "view-users"]
+        # Its own tokens must carry aud=fitmate-backend like every other client (KC default is `account`).
+        audiences = ["fitmate-backend"]
+      },
     ]
 
     # e2e test user. firstName/lastName/email/email_verified are REQUIRED for a password-grant
@@ -101,6 +118,10 @@ inputs = {
     clients = {
       # env-scoped folder inside the mount → fitmate/data/<env>/website/creds
       "fitmate-website" = { path = "${local.environment}/website/creds", key = "AUTH_KEYCLOAK_SECRET" }
+      # admin-service's Admin-API client secret → ESO → the fitmate-admin-<env> namespace.
+      # Its OWN path (not admin/params): vault_kv_secret_v2 manages a path's whole data map, so
+      # writing into admin/params would clobber every other param key.
+      "fitmate-admin-backend" = { path = "${local.environment}/admin/keycloak/creds", key = "KEYCLOAK_CLIENT_SECRET" }
     }
   }
 }
