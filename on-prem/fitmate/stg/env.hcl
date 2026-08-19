@@ -65,6 +65,21 @@ locals {
       KEYCLOAK_ISSUER   = "${local.issuer_host}/realms/${local.realm_name}"
       KEYCLOAK_AUDIENCE = "fitmate-backend"
       KEYCLOAK_JWKSURL  = "http://keycloak-service.keycloak.svc.cluster.local:8080/realms/${local.realm_name}/protocol/openid-connect/certs"
+      # DB DSNs — mirrors dev/env.hcl:73-74. These were MISSING here (SCRUM-227), so ESO
+      # materialised trainee-service-secrets with ONLY the three KEYCLOAK_* keys and the service
+      # had no connection string at all.
+      #
+      # ⚠️ The ExternalSecret reported SecretSynced=True throughout. `dataFrom.extract` pulls
+      # whatever the Vault path happens to hold, so an INCOMPLETE path syncs "successfully" — the
+      # condition attests that the extract RAN, not that the expected keys are present. Verify by
+      # listing key names on the materialised Secret, never by the sync status.
+      #
+      # One shared PG server, separate DB per env (ADR 2026-08-07 single-cluster multienv):
+      # ${local.environment} → db trainee_stg owned by trainee_app_stg, provisioned by the
+      # stg/database/trainee unit. The {{...:password}} token is replaced by vault-secrets with the
+      # generated password of the sibling creds secret seeded above (lines 44-45).
+      DATABASE_WRITE_DB_CONNECTION_STRING = "postgresql://trainee_app_${local.environment}:{{database/trainee/app/creds:password}}@192.168.105.10:5432/trainee_${local.environment}?sslmode=disable"
+      DATABASE_READ_DB_CONNECTION_STRING  = "postgresql://trainee_ro_${local.environment}:{{database/trainee/ro/creds:password}}@192.168.105.10:5432/trainee_${local.environment}?sslmode=disable"
     }
   }
 
