@@ -87,6 +87,7 @@ dependency "vault-secrets" {
       "keycloak/admin/creds"        = { username = "admin", password = "MOCK" }
       "kafka/creds"                 = { clientUsername = "admin", clientPassword = "MOCK" }
       "redis/creds"                 = { password = "MOCK" }
+      "grafana/creds"               = { username = "admin", password = "MOCK" }
     }
   }
 
@@ -317,6 +318,86 @@ inputs = {
     # the existing SC (no new StorageClass is created — the chart has no sc.yml.tftpl, same as kafka).
     common = {
       sc_name = "local-path"
+    }
+  }
+
+  # ── Observability: kube-prometheus-stack (IN-13) ──────────────────────────────────────────────
+  # Dev had NO observability at all: every FitMate service already exposed Prometheus metrics and
+  # every gitops overlay carried `serviceMonitor: enabled: false  # TEMP: no Prometheus Operator
+  # on-cluster yet`. Instrumentation complete, nothing scraping it — which is why every incident
+  # this month was diagnosed by hand-reading pod logs, and why SCRUM-234 (Kafka consumption dead
+  # platform-wide) went unnoticed for weeks when consumer lag would have shown it in a day.
+  #
+  # Chart 88.5.2 / appVersion v0.93.1 (resolved from the live repo, not guessed).
+  prometheus_conf = {
+    helm = {
+      chart_version = "88.5.2"
+
+      namespace    = "monitoring"
+      repository   = "https://prometheus-community.github.io/helm-charts"
+      release_name = "prometheus"
+    }
+
+    # ⚠️ LIMITS ARE LOAD-BEARING, NOT HYGIENE. Schedulable capacity is 3 agents x 2 vCPU / 2962Mi
+    # (both servers are control-plane tainted), ~51% used, with 5 more services still to onboard.
+    # The chart's own defaults are sized for production clusters; unbounded Prometheus on a 2.9Gi
+    # node evicts its neighbours. Sized for the few thousand active series this lab actually has.
+    # Whole stack lands at roughly 1-1.8Gi. Raise ONLY from measured numbers.
+    prometheus = {
+      retention      = "7d"  # debugging aid, not a compliance store
+      retention_size = "4GB" # the hard stop that protects the node as series grow
+      resources = {
+        requests = { cpu = "100m", memory = "512Mi" }
+        limits   = { cpu = "1000m", memory = "1Gi" }
+      }
+    }
+
+    grafana = {
+      # Admin password from Vault platform/grafana/creds. The chart default is the well-known
+      # literal `prom-operator`, and Grafana is published on a routable hostname below — so the
+      # default would be a cluster-wide credential sitting on the network.
+      auth = {
+        password = dependency.vault-secrets.outputs.secrets["grafana/creds"]["password"]
+      }
+      ingress = {
+        prefix = "/"
+      }
+      resources = {
+        requests = { cpu = "50m", memory = "128Mi" }
+        limits   = { cpu = "300m", memory = "256Mi" }
+      }
+    }
+
+    # Rules evaluate from day one; DELIVERY (Telegram/Slack) is wired LAST, deliberately. An
+    # unrouted alert still fires and still shows in the UI, which is what proves the rule works
+    # before a notification channel is chosen.
+    alertmanager = {
+      resources = {
+        requests = { cpu = "20m", memory = "64Mi" }
+        limits   = { cpu = "150m", memory = "128Mi" }
+      }
+    }
+
+    # Grafana UI via Gateway API HTTPRoute on the shared traefik-gateway `web` listener, same shape
+    # as argocd/keycloak. Backend is plain HTTP :80, so no BackendTLSPolicy — which also avoids the
+    # Traefik GW API hostname-verification bug that blocks HTTPS re-encryption.
+    #
+    # CONFIRMED by `helm template` against chart 88.5.2: release `prometheus` renders the Grafana
+    # Service as `prometheus-grafana` with port http-web:80. Not inferred from the release name.
+    routing = {
+      httproutes = [
+        {
+          name              = "grafana"
+          namespace         = "monitoring"
+          gateway_name      = "traefik-gateway"
+          gateway_namespace = "traefik"
+          section_name      = "web"
+          hostnames         = ["grafana.k3s.${local.cluster_suffix}"]
+          path_prefix       = "/"
+          backend_name      = "prometheus-grafana"
+          backend_port      = 80
+        }
+      ]
     }
   }
 
