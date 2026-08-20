@@ -97,6 +97,21 @@ locals {
     # roles are granted read on platform/kafka + platform/redis to consume them.
     "kafka/creds" = { clientUsername = "admin", clientPassword = "{ _RANDOM_ = 18 }" }
     "redis/creds" = { password = "{ _RANDOM_ = 18 }" }
+
+    # Grafana admin (IN-13). Platform-level: ONE monitoring stack watches every env, so this is not
+    # env-foldered. Consumed by shared/ops-tools → kube-prometheus-stack `grafana.adminPassword`.
+    #
+    # ⚠️ This MUST be set. The chart's default admin password is the well-known literal
+    # `prom-operator`, and Grafana is exposed on a routable hostname (grafana.k3s.fitmate), so
+    # leaving the default is a cluster-wide credential published on the network.
+    #
+    # ⚠️ ROTATION HAZARD: this is a `_RANDOM_`, so re-applying shared/vault-secrets re-rolls it —
+    # the same cascade that has previously broken DB roles and locked out the Keycloak admin.
+    # Grafana stores the admin password in its own DB on first boot and does NOT re-read this on
+    # later syncs, so a re-roll silently desynchronises Vault from the live Grafana. If it is ever
+    # re-rolled, reset in-place via `grafana-cli admin reset-admin-password` rather than assuming
+    # the new Vault value took effect.
+    "grafana/creds" = { username = "admin", password = "{ _RANDOM_ = 20 }" }
   }
 
   tags = {
