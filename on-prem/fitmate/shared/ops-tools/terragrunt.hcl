@@ -322,68 +322,78 @@ inputs = {
   }
 
   # ── Observability: kube-prometheus-stack (IN-13) ──────────────────────────────────────────────
-  # Dev had NO observability at all: every FitMate service already exposed Prometheus metrics and
-  # every gitops overlay carried `serviceMonitor: enabled: false  # TEMP: no Prometheus Operator
-  # on-cluster yet`. Instrumentation complete, nothing scraping it — which is why every incident
-  # this month was diagnosed by hand-reading pod logs, and why SCRUM-234 (Kafka consumption dead
-  # platform-wide) went unnoticed for weeks when consumer lag would have shown it in a day.
+  # Dev had NO observability: every service already exposed Prometheus metrics and every gitops
+  # overlay carried `serviceMonitor: enabled: false  # TEMP: no Prometheus Operator on-cluster yet`.
+  # Instrumentation complete, nothing scraping it — which is why every incident this month was
+  # diagnosed by hand-reading pod logs, and why SCRUM-234 (Kafka consumption dead platform-wide)
+  # went unnoticed for weeks when consumer lag would have shown it in a day.
   #
   # Chart 88.5.2 / appVersion v0.93.1 (resolved from the live repo, not guessed).
+  #
+  # ⚠️ FLAT STRING VALUES ONLY — shared/helm declares `variable "parameters"` as `map(any)`, and
+  # map(any) unifies ALL elements to one type. Nested resource blocks of differing shapes fail with
+  # "all map elements must have the same type". Every other chart here (redis, kafka) passes flat
+  # map(string) sub-maps for the same reason. Do not reintroduce nested `resources { requests {...} }`,
+  # and do not add a top-level scalar beside these three maps.
   prometheus_conf = {
     helm = {
       chart_version = "88.5.2"
 
-      namespace    = "monitoring"
-      repository   = "https://prometheus-community.github.io/helm-charts"
-      release_name = "prometheus"
+      namespace  = "monitoring"
+      repository = "https://prometheus-community.github.io/helm-charts"
+      # ⚠️ release_name MUST equal the upstream CHART name. shared/helm does
+      #   chart = coalesce(local.chart, var.name)
+      # so with no local chart, var.name IS the chart pulled from the repo — and it also selects the
+      # values dir charts/<name>/. Naming this "prometheus" resolved to prometheus-community's
+      # STANDALONE `prometheus` chart -> "Error locating chart". The values dir was renamed to match.
+      release_name = "kube-prometheus-stack"
     }
 
     # ⚠️ LIMITS ARE LOAD-BEARING, NOT HYGIENE. Schedulable capacity is 3 agents x 2 vCPU / 2962Mi
-    # (both servers are control-plane tainted), ~51% used, with 5 more services still to onboard.
-    # The chart's own defaults are sized for production clusters; unbounded Prometheus on a 2.9Gi
-    # node evicts its neighbours. Sized for the few thousand active series this lab actually has.
-    # Whole stack lands at roughly 1-1.8Gi. Raise ONLY from measured numbers.
+    # (both servers control-plane tainted), ~51% used, with 5 more services still to onboard. The
+    # chart's own defaults are sized for production clusters; an unbounded Prometheus on a 2.9Gi
+    # node evicts its neighbours. Sized for the few thousand active series this lab actually has;
+    # whole stack lands ~1-1.8Gi. Raise ONLY from measured numbers.
     prometheus = {
+      ingress_prefix = "/"
       retention      = "7d"  # debugging aid, not a compliance store
-      retention_size = "4GB" # the hard stop that protects the node as series grow
-      resources = {
-        requests = { cpu = "100m", memory = "512Mi" }
-        limits   = { cpu = "1000m", memory = "1Gi" }
-      }
+      retention_size = "4GB" # hard stop that protects the node as series grow
+      cpu_request    = "100m"
+      memory_request = "512Mi"
+      cpu_limit      = "1000m"
+      memory_limit   = "1Gi"
     }
 
+    # Admin password from Vault platform/grafana/creds. The chart default is the well-known literal
+    # `prom-operator`, and Grafana is published on a routable hostname below — so the default would
+    # be a cluster-wide credential sitting on the network.
+    # `loki_url` is intentionally omitted (no Loki on this cluster); the template renders the Loki
+    # datasource only when it is present.
     grafana = {
-      # Admin password from Vault platform/grafana/creds. The chart default is the well-known
-      # literal `prom-operator`, and Grafana is published on a routable hostname below — so the
-      # default would be a cluster-wide credential sitting on the network.
-      auth = {
-        password = dependency.vault-secrets.outputs.secrets["grafana/creds"]["password"]
-      }
-      ingress = {
-        prefix = "/"
-      }
-      resources = {
-        requests = { cpu = "50m", memory = "128Mi" }
-        limits   = { cpu = "300m", memory = "256Mi" }
-      }
+      password       = dependency.vault-secrets.outputs.secrets["grafana/creds"]["password"]
+      ingress_prefix = "/"
+      cpu_request    = "50m"
+      memory_request = "128Mi"
+      cpu_limit      = "300m"
+      memory_limit   = "256Mi"
     }
 
     # Rules evaluate from day one; DELIVERY (Telegram/Slack) is wired LAST, deliberately. An
-    # unrouted alert still fires and still shows in the UI, which is what proves the rule works
-    # before a notification channel is chosen.
+    # unrouted alert still fires and still shows in the UI, which is what proves the rule works.
     alertmanager = {
-      resources = {
-        requests = { cpu = "20m", memory = "64Mi" }
-        limits   = { cpu = "150m", memory = "128Mi" }
-      }
+      cpu_request    = "20m"
+      memory_request = "64Mi"
+      cpu_limit      = "150m"
+      memory_limit   = "128Mi"
     }
 
     # Grafana UI via Gateway API HTTPRoute on the shared traefik-gateway `web` listener, same shape
     # as argocd/keycloak. Backend is plain HTTP :80, so no BackendTLSPolicy — which also avoids the
     # Traefik GW API hostname-verification bug that blocks HTTPS re-encryption.
     #
-    # CONFIRMED by `helm template` against chart 88.5.2: release `prometheus` renders the Grafana
-    # Service as `prometheus-grafana` with port http-web:80. Not inferred from the release name.
+    # CONFIRMED by `helm template` against chart 88.5.2: release `kube-prometheus-stack` renders the
+    # Grafana Service as `kube-prometheus-stack-grafana`, port http-web:80. Re-verified after the
+    # rename below — the service name is derived from the RELEASE name, so it moved with it.
     routing = {
       httproutes = [
         {
@@ -394,7 +404,7 @@ inputs = {
           section_name      = "web"
           hostnames         = ["grafana.k3s.${local.cluster_suffix}"]
           path_prefix       = "/"
-          backend_name      = "prometheus-grafana"
+          backend_name      = "kube-prometheus-stack-grafana"
           backend_port      = 80
         }
       ]
