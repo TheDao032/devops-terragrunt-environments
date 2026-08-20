@@ -369,13 +369,20 @@ inputs = {
     # be a cluster-wide credential sitting on the network.
     # `loki_url` is intentionally omitted (no Loki on this cluster); the template renders the Loki
     # datasource only when it is present.
+    # ⚠️ Grafana's CPU limit is deliberately GENEROUS. 300m throttled it into a 5-restart crash loop:
+    # CPU sat pegged at exactly 300m, Grafana never opened :3000 in time, and the livenessProbe killed
+    # it mid-boot ("connection refused", reason=Error exit=1 — NOT OOMKilled). Grafana 13.x registers
+    # ~10 *.grafana.app API groups at startup, then idles near 0. Only REQUESTS are reserved by the
+    # scheduler, so a high limit with a low request is free burst headroom. Tight limits are a memory
+    # discipline, not a CPU one. The values template also adds a startupProbe so liveness stops
+    # policing boot. Steady-state observed: ~218Mi, so 384Mi limit leaves real headroom over 256Mi.
     grafana = {
       password       = dependency.vault-secrets.outputs.secrets["grafana/creds"]["password"]
       ingress_prefix = "/"
-      cpu_request    = "50m"
-      memory_request = "128Mi"
-      cpu_limit      = "300m"
-      memory_limit   = "256Mi"
+      cpu_request    = "100m"
+      memory_request = "192Mi"
+      cpu_limit      = "1000m"
+      memory_limit   = "384Mi"
     }
 
     # Rules evaluate from day one; DELIVERY (Telegram/Slack) is wired LAST, deliberately. An
