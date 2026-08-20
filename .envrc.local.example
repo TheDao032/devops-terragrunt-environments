@@ -15,6 +15,25 @@
 # export GITHUB_TOKEN="ghp_xxxxxxxx"
 # export SSH_PRIVATE_KEY="$(cat "$HOME/.ssh/gitops_ed25519")"
 
+# ── Social-login provider secrets (IN-14) ──────────────────────────────────────────────────────
+# Consumed by dev/env.hcl's `identity_providers` block -> the keycloak/fitmate unit, which
+# configures Google/Facebook as Keycloak realm IDENTITY PROVIDERS.
+#
+# These are used BY KEYCLOAK for the OAuth code exchange:
+#     browser -> Keycloak -> Google -> Keycloak -> app receives a Keycloak JWT
+# The application NEVER sees them. Do not deliver them to a service via ESO, and never as
+# SUPERTOKENS_* keys — SuperTokens is retired (see trainee/prod values.yaml:63). That was the
+# mistake in the closed PR #14; the correct design is IN-14.
+#
+# The matching client_id is NOT secret and is committed in dev/env.hcl — only the secret lives here.
+# Unset = empty = that provider is simply not configured, which is a safe default.
+#
+# ⚠️ These replace credentials that were committed in plaintext to fitmate-trainer-service's
+# config/local/config.yaml and git-tracked since 2026-05-11. Use the ROTATED values only —
+# putting a pre-rotation value here leaves the original leak unremediated.
+# export GOOGLE_CLIENTSECRET="GOCSPX-xxxxxxxx"
+# export FACEBOOK_CLIENTSECRET="xxxxxxxx"
+
 # Override the kubeconfig location if not using the default k3s lab path:
 # export KUBECONFIG="$HOME/.kube/config"
 
