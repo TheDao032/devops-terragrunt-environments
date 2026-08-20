@@ -32,6 +32,15 @@ locals {
     "trainee/ghcr-pull" = { username = local.backend_github_username, token = local.backend_github_token }
     "website/ghcr-pull" = { username = local.backend_github_username, token = local.backend_github_token }
     "trainer/ghcr-pull" = { username = local.backend_github_username, token = local.backend_github_token }
+    # DRIFT REPAIR (2026-08-20): booking/inquiry/admin/payment were pulling private GHCR images in dev
+    # from Vault docs that existed ONLY in Vault — never declared here. Their ExternalSecrets read
+    # dev/<svc>/ghcr-pull and reported SecretSynced, so nothing looked wrong, but a Vault rebuild would
+    # not have restored them and `terragrunt apply` would not have recreated them. Same PAT as above;
+    # writing these is idempotent (no _RANDOM_), so applying re-declares what is already there.
+    "booking/ghcr-pull" = { username = local.backend_github_username, token = local.backend_github_token }
+    "inquiry/ghcr-pull" = { username = local.backend_github_username, token = local.backend_github_token }
+    "admin/ghcr-pull"   = { username = local.backend_github_username, token = local.backend_github_token }
+    "payment/ghcr-pull" = { username = local.backend_github_username, token = local.backend_github_token }
 
     # ── PostgreSQL superuser (tf_admin) — ONE PG server backs all envs, so this is the same stable
     #    value everywhere (also in shared/env.hcl for the keycloak DB). Read by this env's database units.
@@ -79,11 +88,65 @@ locals {
     #    the generated pw. DB trainer_<env> owned by trainer_app_<env> is provisioned by the dev/database
     #    unit (IN-7). PG on the external LAN host (192.168.105.10).
     "trainer/params" = {
-      KEYCLOAK_ISSUER   = "${local.issuer_host}/realms/${local.realm_name}"
-      KEYCLOAK_AUDIENCE = "fitmate-backend"
-      KEYCLOAK_JWKSURL  = "http://keycloak-service.keycloak.svc.cluster.local:8080/realms/${local.realm_name}/protocol/openid-connect/certs"
+      KEYCLOAK_ISSUER                     = "${local.issuer_host}/realms/${local.realm_name}"
+      KEYCLOAK_AUDIENCE                   = "fitmate-backend"
+      KEYCLOAK_JWKSURL                    = "http://keycloak-service.keycloak.svc.cluster.local:8080/realms/${local.realm_name}/protocol/openid-connect/certs"
       DATABASE_WRITE_DB_CONNECTION_STRING = "postgresql://trainer_app_${local.environment}:{{database/trainer/app/creds:password}}@192.168.105.10:5432/trainer_${local.environment}?sslmode=disable"
       DATABASE_READ_DB_CONNECTION_STRING  = "postgresql://trainer_ro_${local.environment}:{{database/trainer/ro/creds:password}}@192.168.105.10:5432/trainer_${local.environment}?sslmode=disable"
+    }
+
+    # ── DRIFT REPAIR (2026-08-20) — booking / inquiry / admin / payment.
+    #
+    # The "MVP: only trainee migrated; fan out per service in Phase 2" note above was never actioned,
+    # yet all four services have been running in dev for weeks. Their ExternalSecrets read
+    # dev/<svc>/params and report SecretSynced=True, because the docs DO exist in Vault — they were
+    # created out-of-band and never written back into this file.
+    #
+    # Net effect: dev worked but was NOT REPRODUCIBLE. Wipe Vault (the documented lab-rebuild path)
+    # and four of six services never come back, with `terragrunt apply` unable to restore them.
+    # Nothing goes red in that scenario until a pod tries to start.
+    #
+    # Key sets below were read from the LIVE materialised Secrets, not copied from trainee — payment
+    # deliberately differs (write-only, no RO role, no Kafka/Redis).
+    # Safe to apply: every value here is deterministic (static strings + {{...:password}} composition
+    # tokens referencing creds already declared above). NO _RANDOM_, so no password re-roll cascade.
+
+    "booking/params" = {
+      KEYCLOAK_ISSUER                     = "${local.issuer_host}/realms/${local.realm_name}"
+      KEYCLOAK_AUDIENCE                   = "fitmate-backend"
+      KEYCLOAK_JWKSURL                    = "http://keycloak-service.keycloak.svc.cluster.local:8080/realms/${local.realm_name}/protocol/openid-connect/certs"
+      DATABASE_WRITE_DB_CONNECTION_STRING = "postgresql://booking_app_${local.environment}:{{database/booking/app/creds:password}}@192.168.105.10:5432/booking_${local.environment}?sslmode=disable"
+      DATABASE_READ_DB_CONNECTION_STRING  = "postgresql://booking_ro_${local.environment}:{{database/booking/ro/creds:password}}@192.168.105.10:5432/booking_${local.environment}?sslmode=disable"
+    }
+
+    "inquiry/params" = {
+      KEYCLOAK_ISSUER                     = "${local.issuer_host}/realms/${local.realm_name}"
+      KEYCLOAK_AUDIENCE                   = "fitmate-backend"
+      KEYCLOAK_JWKSURL                    = "http://keycloak-service.keycloak.svc.cluster.local:8080/realms/${local.realm_name}/protocol/openid-connect/certs"
+      DATABASE_WRITE_DB_CONNECTION_STRING = "postgresql://inquiry_app_${local.environment}:{{database/inquiry/app/creds:password}}@192.168.105.10:5432/inquiry_${local.environment}?sslmode=disable"
+      DATABASE_READ_DB_CONNECTION_STRING  = "postgresql://inquiry_ro_${local.environment}:{{database/inquiry/ro/creds:password}}@192.168.105.10:5432/inquiry_${local.environment}?sslmode=disable"
+    }
+
+    # admin also carries KEYCLOAK_CLIENTSECRET, delivered from the SEPARATE doc dev/admin/keycloak/creds
+    # via a per-key `data` ref (not this extract). That doc is deliberately NOT declared here — it holds
+    # a real Keycloak client secret owned by the keycloak/fitmate unit, and seeding it from this file
+    # would overwrite a live credential. Tracked separately; see IN backlog.
+    "admin/params" = {
+      KEYCLOAK_ISSUER                     = "${local.issuer_host}/realms/${local.realm_name}"
+      KEYCLOAK_AUDIENCE                   = "fitmate-backend"
+      KEYCLOAK_JWKSURL                    = "http://keycloak-service.keycloak.svc.cluster.local:8080/realms/${local.realm_name}/protocol/openid-connect/certs"
+      DATABASE_WRITE_DB_CONNECTION_STRING = "postgresql://admin_app_${local.environment}:{{database/admin/app/creds:password}}@192.168.105.10:5432/admin_${local.environment}?sslmode=disable"
+      DATABASE_READ_DB_CONNECTION_STRING  = "postgresql://admin_ro_${local.environment}:{{database/admin/ro/creds:password}}@192.168.105.10:5432/admin_${local.environment}?sslmode=disable"
+    }
+
+    # payment is WRITE-ONLY (matches the `database/payment/app/creds` note above — no RO role exists).
+    # Its live Secret has exactly 4 keys: no DATABASE_READ, no Kafka, no Redis. Do NOT "normalise" this
+    # to match the others — payment runs Kafka in mock mode in dev and uses no cache.
+    "payment/params" = {
+      KEYCLOAK_ISSUER                     = "${local.issuer_host}/realms/${local.realm_name}"
+      KEYCLOAK_AUDIENCE                   = "fitmate-backend"
+      KEYCLOAK_JWKSURL                    = "http://keycloak-service.keycloak.svc.cluster.local:8080/realms/${local.realm_name}/protocol/openid-connect/certs"
+      DATABASE_WRITE_DB_CONNECTION_STRING = "postgresql://payment_app_${local.environment}:{{database/payment/app/creds:password}}@192.168.105.10:5432/payment_${local.environment}?sslmode=disable"
     }
   }
 
