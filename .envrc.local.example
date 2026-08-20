@@ -15,6 +15,14 @@
 # export GITHUB_TOKEN="ghp_xxxxxxxx"
 # export SSH_PRIVATE_KEY="$(cat "$HOME/.ssh/gitops_ed25519")"
 
+# Social-login OAuth client secrets for trainer-service (SCRUM-235). Feed dev/env.hcl's
+# "trainer/params" -> fitmate/dev/trainer/params. These REPLACE credentials that were committed
+# in plaintext to the app repo since 2026-05-11, so they must never be inlined in any .hcl file.
+# Unset = empty = that provider is DISABLED (config/local/config.yaml: "Leave clientId/clientSecret
+# empty to disable a specific provider"), which is the correct fail-safe.
+# export GOOGLE_CLIENTSECRET="GOCSPX-xxxxxxxx"
+# export FACEBOOK_CLIENTSECRET="xxxxxxxx"
+
 # Override the kubeconfig location if not using the default k3s lab path:
 # export KUBECONFIG="$HOME/.kube/config"
 

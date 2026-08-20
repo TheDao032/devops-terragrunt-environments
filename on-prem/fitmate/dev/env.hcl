@@ -93,6 +93,49 @@ locals {
       KEYCLOAK_JWKSURL                    = "http://keycloak-service.keycloak.svc.cluster.local:8080/realms/${local.realm_name}/protocol/openid-connect/certs"
       DATABASE_WRITE_DB_CONNECTION_STRING = "postgresql://trainer_app_${local.environment}:{{database/trainer/app/creds:password}}@192.168.105.10:5432/trainer_${local.environment}?sslmode=disable"
       DATABASE_READ_DB_CONNECTION_STRING  = "postgresql://trainer_ro_${local.environment}:{{database/trainer/ro/creds:password}}@192.168.105.10:5432/trainer_${local.environment}?sslmode=disable"
+
+      # ── Social-login OAuth client secrets (SCRUM-235 rotation, 2026-08-20).
+      #
+      # Replaces the credentials that were committed in plaintext to trainer-service's
+      # config/local/config.yaml and git-tracked since the first commit (2026-05-11).
+      # Values come from .envrc.local (git-ignored, see .envrc.local.example) — NEVER inline
+      # them here; committing them is the exact incident this is remediating.
+      #
+      # PER-ENV, not shared/env.hcl: shared is the PLATFORM tier (one Vault/ArgoCD/Keycloak/
+      # Kafka), while these are APP credentials for one service. A shared OAuth credential
+      # would also mean a dev leak compromises prod — precisely the blast radius being cleaned
+      # up here. There is currently ONE Google client across envs; split it into per-env
+      # clients when social login is actually wired for stg/prod, not before.
+      #
+      # KEY NAMES are mechanical, not chosen: the toolkit calls viper.AutomaticEnv() with
+      # SetEnvKeyReplacer(strings.NewReplacer(".", "_")) (toolkit config/config.go:22-23), so a
+      # YAML path becomes its uppercased dot-to-underscore form. Verified against a key already
+      # working in this file: DATABASE.WRITE_DB.CONNECTION_STRING -> DATABASE_WRITE_DB_CONNECTION_STRING.
+      # Hence superTokens.thirdParty.google.clientSecret -> SUPERTOKENS_THIRDPARTY_GOOGLE_CLIENTSECRET.
+      #
+      # EMPTY DEFAULT IS THE FAIL-SAFE, not laziness: config/local/config.yaml states "Leave
+      # clientId/clientSecret empty to disable a specific provider." So an unset env var
+      # disables that provider rather than half-configuring it. This is the one place where an
+      # empty default is correct and a `.invalid` sentinel (SCRUM-230) would be wrong — a fake
+      # secret would leave the provider ENABLED and failing at auth time instead of cleanly off.
+      #
+      # FACEBOOK IS NOT ROTATED YET (as of 2026-08-20). Its key is declared so the doc shape is
+      # complete and the value lands the moment FACEBOOK_CLIENTSECRET is exported; until then it
+      # writes empty = provider disabled.
+      #
+      # ⚠️ NOT CONSUMED TODAY. trainer-service passes an EMPTY SupertokensConfig{}
+      # (internal/api/http/server.go:142) and the toolkit gates the entire SuperTokens block on
+      # ConnectionURI != "" (toolkit http/server/server.go:101) — so nothing reads these. They are
+      # storage for Track B (Keycloak social login). No rollout or login-verification step applies.
+      #
+      # ⚠️ AND WHEN TRACK B DOES WIRE IT, THIS ALONE WILL NOT WORK: viper's AutomaticEnv only
+      # overlays env vars onto keys ALREADY PRESENT in the loaded config/<env>/config.yaml, and
+      # the `thirdParty` block exists ONLY in config/local/config.yaml — verified absent from
+      # both config/dev and config/prod. The value will be written to Vault correctly, delivered
+      # by ESO correctly, and then silently discarded by the app. Track B must add an empty
+      # thirdParty block to config/dev|prod first. Same failure family as SCRUM-230, inverted.
+      SUPERTOKENS_THIRDPARTY_GOOGLE_CLIENTSECRET   = get_env("GOOGLE_CLIENTSECRET", "")
+      SUPERTOKENS_THIRDPARTY_FACEBOOK_CLIENTSECRET = get_env("FACEBOOK_CLIENTSECRET", "")
     }
 
     # ── DRIFT REPAIR (2026-08-20) — booking / inquiry / admin / payment.
