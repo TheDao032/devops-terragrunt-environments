@@ -175,10 +175,28 @@ inputs = {
           gateway_name      = "traefik-gateway"
           gateway_namespace = "traefik"
           section_name      = "web"
-          hostnames         = ["keycloak.k3s.${local.cluster_suffix}"]
-          path_prefix       = "/"
-          backend_name      = "keycloak-service"
-          backend_port      = 8080
+          # ⚠️ THIS LIST IS A SECURITY BOUNDARY, not just routing (IN-15 phase 3).
+          # With hostname_dynamic = true above, Keycloak derives `iss` from X-Forwarded-Host — so it
+          # will stamp whatever host reaches it. Traefik only forwards Hosts listed here; an
+          # unlisted Host does not route at all. That is the ONLY thing stopping host-header
+          # injection from forging an issuer.
+          # NEVER add a wildcard here. Every entry must be a hostname we deliberately publish.
+          #
+          # keycloak.k3s.fitmate — in-cluster/lab access, unchanged (this is what keeps phase 2 a
+          #                        no-op: requests on this host derive the same issuer as before).
+          # auth.dev/stg         — reached via the Cloudflare tunnel, Access-gated, so each env
+          #                        stamps its own correct issuer:
+          #                          auth.dev.fitmate.me -> iss https://auth.dev.fitmate.me/realms/fitmate-dev
+          #                        which is what makes the Google/Facebook broker callbacks
+          #                        registrable at all (both providers require https).
+          hostnames = [
+            "keycloak.k3s.${local.cluster_suffix}",
+            "auth.dev.fitmate.me",
+            "auth.stg.fitmate.me",
+          ]
+          path_prefix  = "/"
+          backend_name = "keycloak-service"
+          backend_port = 8080
         }
       ]
     }
