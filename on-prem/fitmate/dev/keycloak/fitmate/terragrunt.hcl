@@ -127,18 +127,39 @@ inputs = {
     # to create a provider account bearing a victim's address inherits that FITMate account.
     # Changing it needs a written decision.
     identity_providers = [
+      # ⚠️ PER-ENV SECRET VARIABLES (…_DEV / …_STG / …_PROD), not a bare GOOGLE_CLIENTSECRET.
+      # Each env has its OWN OAuth client, so one shared variable can only ever hold one env's
+      # secret — and applying stg while it holds dev's value produces a SUCCESSFUL apply and a
+      # login that fails at the provider. Suffixing makes that impossible rather than merely
+      # unlikely. Export in .envrc.local:
+      #     export GOOGLE_CLIENTSECRET_DEV="GOCSPX-…"
+      #     export FACEBOOK_CLIENTSECRET_DEV="…"
+      # An unset variable yields "" and the module SKIPS that provider (visible in the
+      # `identity_providers_skipped` output) rather than creating one with a blank secret.
       {
-        alias          = "google"
-        client_id      = "290257968475-d77r4sl3clj5ivc7l3gev768kgrpnuf4.apps.googleusercontent.com"
-        client_secret  = get_env("GOOGLE_CLIENTSECRET", "")
+        alias = "google"
+        # DEDICATED client `FITMate Keycloak — dev` (created 2026-08-22). Previously this reused
+        # the Firebase auto-created client (290257968475-d77r4sl3…), which also backs the mobile
+        # app's google_sign_in serverClientId and Firebase Crashlytics/FCM. Sharing it meant one
+        # credential served three unrelated consumers — rotating for one silently risked the
+        # others, which is exactly the coupling SCRUM-235 existed to remove.
+        # DO NOT point this back at the Firebase client, and do not delete that client: the mobile
+        # app hardcodes its ID in Dart (auth_repository.dart), so removing it breaks mobile
+        # Google sign-in immediately (see SCRUM-244).
+        client_id      = "290257968475-mp8akbb8dgjkhmgau7bpdcptk74bh84e.apps.googleusercontent.com"
+        client_secret  = get_env("GOOGLE_CLIENTSECRET_DEV", "")
         default_scopes = "openid profile email"
         trust_email    = false
         sync_mode      = "IMPORT"
       },
       {
+        # ⚠️ STILL THE SHARED META APP. Unlike Google, a dedicated per-env Facebook app has not
+        # been created yet — this is the same app ID that was in the leaked config. Split it the
+        # same way (`FITMate dev` / `stg` / `prod`) when convenient; until then a dev leak reaches
+        # every env. Meta has NO two-secret window, so rotate and update consumers in one sitting.
         alias         = "facebook"
         client_id     = "1507947667436834"
-        client_secret = get_env("FACEBOOK_CLIENTSECRET", "")
+        client_secret = get_env("FACEBOOK_CLIENTSECRET_DEV", "")
         trust_email   = false
         sync_mode     = "IMPORT"
       },
