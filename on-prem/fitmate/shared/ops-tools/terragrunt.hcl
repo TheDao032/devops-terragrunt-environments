@@ -184,7 +184,8 @@ inputs = {
           #
           # keycloak.k3s.fitmate — in-cluster/lab access, unchanged (this is what keeps phase 2 a
           #                        no-op: requests on this host derive the same issuer as before).
-          # auth.dev/stg         — reached via the Cloudflare tunnel, Access-gated, so each env
+          # auth.dev/stg         — reached via THAT ENV'S OWN Cloudflare tunnel (dev/cloudflare-tunnel,
+          #                        stg/cloudflare-tunnel), Access-gated, so each env
           #                        stamps its own correct issuer:
           #                          auth.dev.fitmate.me -> iss https://auth.dev.fitmate.me/realms/fitmate-dev
           #                        which is what makes the Google/Facebook broker callbacks

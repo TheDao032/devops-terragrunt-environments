@@ -17,6 +17,13 @@ locals {
   environment  = "stg"
   cluster_name = "fitmate"
 
+  # Cloudflare API token for THIS env's edge units (cloudflare-tunnel / cloudflare-access), read as
+  # local.environment_vars.locals.cloudflare_api_token. From the CLOUDFLARE_API_TOKEN env var
+  # (.envrc.local). Added 2026-08-22 (IN-15): each env now owns its OWN tunnel + connector, so the
+  # edge stack is no longer prod-only. One tunnel per env keeps a leaked token scoped to that env's
+  # hostnames, and avoids a shared tunnel whose single ingress resource can only have one owner.
+  cloudflare_api_token = get_env("CLOUDFLARE_API_TOKEN", "")
+
   # Realm name for this env on the shared Keycloak (matches keycloak/fitmate unit): fitmate-<env>,
   # or plain `fitmate` for prod. Used to build the per-service token issuer/JWKS URLs below.
   realm_name = local.environment == "prod" ? "fitmate" : "fitmate-${local.environment}"

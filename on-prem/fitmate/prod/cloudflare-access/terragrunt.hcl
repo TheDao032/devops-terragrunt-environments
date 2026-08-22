@@ -60,33 +60,5 @@ inputs = {
     "argocd.fitmate.me"  = { name = "ArgoCD" }
     # auth.fitmate.me (Keycloak) is intentionally NOT gated — it's the login provider, must be public.
     # "kafka-ui.fitmate.me" = { name = "kafka-ui" }   # no kafka-ui service yet — deferred
-
-    # ── Per-env Keycloak (IN-15 phase 3) — GATED, unlike prod auth above ─────────────────────────
-    # The note above is right for PRODUCTION auth: it is customer-facing, so it must be public.
-    # That reasoning does not transfer to a dev/stg IdP, whose only users are us. Those realms hold
-    # seeded test users and are the most likely to be running an unpatched Keycloak mid-upgrade, so
-    # there is no reason for the internet to reach their login page. Cost: one Cloudflare login per
-    # session_duration (24h).
-    #
-    # ⚠️ Gating does NOT break the Google/Facebook login flow. Google's redirect back to
-    # .../broker/google/endpoint is an ordinary browser navigation on the SAME hostname, so it still
-    # carries the CF_Authorization cookie set seconds earlier at the start of the flow — Access
-    # passes it straight through.
-    #
-    # ⚠️ Nor does it break token validation. Services fetch JWKS over CLUSTER DNS
-    # (keycloak-service.keycloak.svc.cluster.local:8080), never through Cloudflare, so that
-    # server-to-server call never meets Access. That issuer/JWKS split already exists for a
-    # different reason — see the KEYCLOAK_JWKSURL note in each env.hcl — and is precisely what makes
-    # gating safe here. If a backchannel caller ever DID come via the public host, it would receive
-    # Cloudflare's login page instead of JWKS and signature verification would fail.
-    #
-    # Real cost to accept: a future automated e2e test driving a browser login against dev will need
-    # an Access SERVICE TOKEN, not just user credentials.
-    #
-    # To make either host public again: delete its line and apply. Access applications destroy
-    # cleanly (unlike the tunnel's create-only config resource), and routing is unaffected —
-    # reachability lives in the cloudflare-tunnel unit, authorization lives here.
-    "auth.dev.fitmate.me" = { name = "Keycloak dev" }
-    "auth.stg.fitmate.me" = { name = "Keycloak stg" }
   }
 }
