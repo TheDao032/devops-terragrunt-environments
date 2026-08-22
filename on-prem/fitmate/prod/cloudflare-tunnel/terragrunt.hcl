@@ -81,6 +81,15 @@ inputs = {
     # in .terragrunt-cache and the tunnel CONFIG resource is create-only (destroy is a silent no-op
     # that orphans ingress config), so moving state must happen after the backend migration.
     #
+    # DECIDED 2026-08-22 — one shared tunnel, NOT per-env tunnels. Why the hostnames can't just live
+    # in dev/env.hcl and stg/env.hcl: cloudflare_zero_trust_tunnel_cloudflared_config is a SINGLE
+    # resource holding the whole ingress list, so a tunnel has exactly one Terraform owner. Two
+    # units managing the same tunnel would overwrite each other's list on every apply. The only way
+    # to give dev/stg their own folders is to give them their own TUNNELS — four pipes terminating
+    # at the same Traefik, which routes by Host anyway, so the isolation would be illusory.
+    # REVISIT IF prod moves to its own cluster: per-env tunnels stop being a preference and become
+    # forced, and this unit has to be split regardless.
+    #
     # WHY THESE HOSTS EXIST AT ALL: one Keycloak serves every realm, and with hostname_dynamic
     # (phase 2) it derives `iss` from X-Forwarded-Host. So each env needs its OWN public hostname to
     # stamp its own issuer:
