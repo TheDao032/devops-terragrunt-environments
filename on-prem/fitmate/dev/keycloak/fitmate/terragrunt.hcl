@@ -152,17 +152,29 @@ inputs = {
         trust_email    = false
         sync_mode      = "IMPORT"
       },
-      {
-        # ⚠️ STILL THE SHARED META APP. Unlike Google, a dedicated per-env Facebook app has not
-        # been created yet — this is the same app ID that was in the leaked config. Split it the
-        # same way (`FITMate dev` / `stg` / `prod`) when convenient; until then a dev leak reaches
-        # every env. Meta has NO two-secret window, so rotate and update consumers in one sitting.
-        alias         = "facebook"
-        client_id     = "1507947667436834"
-        client_secret = get_env("FACEBOOK_CLIENTSECRET_DEV", "")
-        trust_email   = false
-        sync_mode     = "IMPORT"
-      },
+      # ── Facebook: DEFERRED to a post-launch phase (2026-08-23, owner's call) ────────────────────
+      # Removed rather than left disabled, because the Meta app it referenced (1507947667436834) has
+      # been DELETED — that ID is now dangling. Keeping an `enabled = false` entry would preserve a
+      # reference to a nonexistent app and mislead the next reader.
+      #
+      # The replacement parent app is `FitMate Prod`. To re-enable, per
+      # 30-references/runbook-google-facebook-oauth-clients-per-env:
+      #   1. From `FitMate Prod`: app dropdown -> Create Test App -> "FitMate dev"
+      #      (test apps get their OWN App ID + secret, are always in Development mode — so only
+      #       users with a role can log in — and need NO App Review, unlike a standalone Live app)
+      #   2. In that test app: Facebook Login -> Settings -> Valid OAuth Redirect URIs:
+      #        https://auth-dev.fitmate.me/realms/fitmate-dev/broker/facebook/endpoint
+      #      Parent settings do NOT propagate after creation — set it on the test app itself.
+      #   3. export FACEBOOK_CLIENTSECRET_DEV in .envrc.local
+      #   4. restore the block below and apply
+      #
+      # {
+      #   alias         = "facebook"
+      #   client_id     = "<FitMate dev test-app App ID>"
+      #   client_secret = get_env("FACEBOOK_CLIENTSECRET_DEV", "")
+      #   trust_email   = false   # ADR 2026-08-21 — do not change without superseding it
+      #   sync_mode     = "IMPORT"
+      # },
     ]
   }
 

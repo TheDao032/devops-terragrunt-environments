@@ -35,6 +35,8 @@
 # A single shared GOOGLE_CLIENTSECRET can only hold one env's value, and applying another env
 # with it gives a SUCCESSFUL apply and a login that fails at the provider. Suffix instead:
 # export GOOGLE_CLIENTSECRET_DEV="GOCSPX-xxxxxxxx"
+# Facebook is DEFERRED to a post-launch phase (2026-08-23) — the FACEBOOK_* vars are unused until
+# the Meta test apps exist. See the commented block in <env>/keycloak/fitmate/terragrunt.hcl.
 # export FACEBOOK_CLIENTSECRET_DEV="xxxxxxxx"
 # export GOOGLE_CLIENTSECRET_STG="GOCSPX-xxxxxxxx"     # once the stg client exists
 # export FACEBOOK_CLIENTSECRET_STG="xxxxxxxx"
