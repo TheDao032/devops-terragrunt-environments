@@ -123,7 +123,36 @@ inputs = {
   # → the operator's keycloak-service :8080. CRDs come from init-resources; apply that stack first.
   keycloak_conf = {
     keycloak = {
-      hostname  = "keycloak.k3s.${local.cluster_suffix}"
+      # ⚠️ `hostname` is now only a FALLBACK. With hostname_dynamic = true below, Keycloak omits the
+      # fixed hostname and derives the frontend URL — and therefore the `iss` claim on every token —
+      # from the request's X-Forwarded-Host (honoured via the CR's `proxy.headers: xforwarded`).
+      # Kept because flipping hostname_dynamic back to false must restore the previous behaviour
+      # exactly.
+      hostname = "keycloak.k3s.${local.cluster_suffix}"
+
+      # IN-15 phase 2. ONE Keycloak serves dev/stg/prod, so a pinned hostname forced every realm to
+      # stamp the same issuer — which is why the prod overlays' expected
+      # https://auth.fitmate.me/realms/fitmate cannot match (fitmate-gitops
+      # apps/trainee-service/prod/values.yaml:55-58), and why IN-14's social-login broker callbacks
+      # are unregisterable (Google/Facebook require https; keycloak.k3s.fitmate is plain HTTP).
+      #
+      # NOT A CUTOVER. Requests still arriving on keycloak.k3s.fitmate derive a byte-identical
+      # issuer, so nothing currently working changes. This only ADDS the ability for additional
+      # hosts to issue their own correct issuer once they are routed (phase 3).
+      #
+      # Baseline captured before enabling, to be re-checked after apply — these must be UNCHANGED:
+      #   fitmate-dev -> http://keycloak.k3s.fitmate/realms/fitmate-dev
+      #   fitmate-stg -> http://keycloak.k3s.fitmate/realms/fitmate-stg
+      # Verify with the realm's own discovery doc, not by reading this file:
+      #   curl -s http://keycloak.k3s.fitmate/realms/fitmate-dev/.well-known/openid-configuration | jq -r .issuer
+      #
+      # ⚠️ SECURITY: dynamic resolution trusts the proxy — Keycloak believes whatever Host /
+      # X-Forwarded-Host it receives, so `iss` is attacker-influenced if an arbitrary Host can reach
+      # it. Safe here ONLY because Traefik routes by Gateway API HTTPRoute `hostnames` and an
+      # unlisted Host does not route. Adding a hostname to that route is a SECURITY decision.
+      # Never add a wildcard hostname to the Keycloak HTTPRoute.
+      hostname_dynamic = true
+
       namespace = "keycloak"
       instances = 1
     }
