@@ -10,7 +10,7 @@ terraform {
 # Deploys INTO the cluster (kubernetes provider from root.hcl) → the cluster must be UP. Unlike the
 # sibling cloudflare-tunnel unit (Cloudflare-only, cluster-independent), this one includes root.hcl.
 # Apply ORDER: cloudflare-tunnel (creates tunnel + token) → cloudflared (this). Once it connects,
-# the tunnel flips Inactive → Healthy and auth.dev.fitmate.me starts serving.
+# the tunnel flips Inactive → Healthy and auth-dev.fitmate.me starts serving.
 include "root" {
   path = find_in_parent_folders("root.hcl")
 }

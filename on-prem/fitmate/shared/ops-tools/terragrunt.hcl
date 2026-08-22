@@ -187,13 +187,13 @@ inputs = {
           # auth.dev/stg         — reached via THAT ENV'S OWN Cloudflare tunnel (dev/cloudflare-tunnel,
           #                        stg/cloudflare-tunnel), Access-gated, so each env
           #                        stamps its own correct issuer:
-          #                          auth.dev.fitmate.me -> iss https://auth.dev.fitmate.me/realms/fitmate-dev
+          #                          auth-dev.fitmate.me -> iss https://auth-dev.fitmate.me/realms/fitmate-dev
           #                        which is what makes the Google/Facebook broker callbacks
           #                        registrable at all (both providers require https).
           hostnames = [
             "keycloak.k3s.${local.cluster_suffix}",
-            "auth.dev.fitmate.me",
-            "auth.stg.fitmate.me",
+            "auth-dev.fitmate.me",
+            "auth-stg.fitmate.me",
           ]
           path_prefix  = "/"
           backend_name = "keycloak-service"

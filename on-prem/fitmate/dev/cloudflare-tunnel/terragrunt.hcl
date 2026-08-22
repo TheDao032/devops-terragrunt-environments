@@ -62,7 +62,18 @@ inputs = {
   #
   # WHY THIS HOSTNAME EXISTS: one Keycloak serves every realm, and with hostname_dynamic it derives
   # `iss` from X-Forwarded-Host — so each env needs its own public host to stamp its own issuer:
-  #     auth.dev.fitmate.me -> iss https://auth.dev.fitmate.me/realms/fitmate-dev
+  #     auth-dev.fitmate.me -> iss https://auth-dev.fitmate.me/realms/fitmate-dev
+  #
+  # ⚠️ FLAT NAME ON PURPOSE — `auth-dev`, NOT `auth.dev`. Cloudflare's free Universal SSL certificate
+  # covers exactly `fitmate.me` and `*.fitmate.me`, and a wildcard matches ONE label only. A
+  # multi-level name like auth.dev.fitmate.me is therefore NOT covered: Cloudflare presents no
+  # certificate and the TLS handshake fails outright —
+  #     curl: (35) sslv3 alert handshake failure
+  #     openssl: no peer certificate available
+  # with DNS, tunnel and connector all healthy, which makes it look like a routing bug. Verified
+  # against the live cert: SANs are exactly DNS:fitmate.me, DNS:*.fitmate.me.
+  # Covering *.dev.fitmate.me needs Advanced Certificate Manager (paid add-on). Do NOT "tidy" these
+  # back to dotted subdomains without buying ACM first — the same silent TLS failure returns.
   # Google and Facebook both require https for broker callbacks, which the private plain-HTTP
   # keycloak.k3s.fitmate can never satisfy — that is what blocks IN-14.
   #
@@ -72,6 +83,6 @@ inputs = {
   #
   # Adding a route here also creates its proxied CNAME automatically (one per ingress entry).
   routes = [
-    { hostname = "auth.dev.fitmate.me", service = "http://traefik.traefik.svc.cluster.local:80" },
+    { hostname = "auth-dev.fitmate.me", service = "http://traefik.traefik.svc.cluster.local:80" },
   ]
 }
