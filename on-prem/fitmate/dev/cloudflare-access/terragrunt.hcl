@@ -76,6 +76,6 @@ inputs = {
   # To make it public: delete the entry and apply. Access applications destroy cleanly, and routing
   # is unaffected — reachability lives in cloudflare-tunnel, authorization lives here.
   apps = {
-    "auth.dev.fitmate.me" = { name = "Keycloak dev" }
+    "auth-dev.fitmate.me" = { name = "Keycloak dev" }
   }
 }
