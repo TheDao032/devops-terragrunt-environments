@@ -70,5 +70,38 @@ inputs = {
     { hostname = "traefik.fitmate.me", service = local.traefik },  # Traefik dash (Access-gated)
     { hostname = "kafka-ui.fitmate.me", service = local.traefik }, # kafka-ui    (Access-gated)
     { hostname = "argocd.fitmate.me", service = local.traefik },   # ArgoCD      (Access-gated)
+
+    # ── Per-env Keycloak hosts (IN-15 phase 3) ───────────────────────────────────────────────────
+    # ⚠️ This unit lives under prod/ but is CLUSTER-WIDE in practice: five of the hostnames above
+    # already front shared singletons (Vault, Traefik, kafka-ui, ArgoCD, Keycloak) that serve all
+    # three envs. There is ONE cluster, ONE Traefik and ONE tunnel — so dev/stg get hostnames HERE
+    # rather than their own tunnel + connector. Three connectors would be 6 pods on a cluster
+    # already at its memory ceiling (IN-13), all terminating at the same Traefik.
+    # Re-tiering this unit to shared/ is the correct cleanup but belongs to IN-12: its state lives
+    # in .terragrunt-cache and the tunnel CONFIG resource is create-only (destroy is a silent no-op
+    # that orphans ingress config), so moving state must happen after the backend migration.
+    #
+    # DECIDED 2026-08-22 — one shared tunnel, NOT per-env tunnels. Why the hostnames can't just live
+    # in dev/env.hcl and stg/env.hcl: cloudflare_zero_trust_tunnel_cloudflared_config is a SINGLE
+    # resource holding the whole ingress list, so a tunnel has exactly one Terraform owner. Two
+    # units managing the same tunnel would overwrite each other's list on every apply. The only way
+    # to give dev/stg their own folders is to give them their own TUNNELS — four pipes terminating
+    # at the same Traefik, which routes by Host anyway, so the isolation would be illusory.
+    # REVISIT IF prod moves to its own cluster: per-env tunnels stop being a preference and become
+    # forced, and this unit has to be split regardless.
+    #
+    # WHY THESE HOSTS EXIST AT ALL: one Keycloak serves every realm, and with hostname_dynamic
+    # (phase 2) it derives `iss` from X-Forwarded-Host. So each env needs its OWN public hostname to
+    # stamp its own issuer:
+    #   auth.dev.fitmate.me -> iss https://auth.dev.fitmate.me/realms/fitmate-dev
+    # Without that, Google/Facebook cannot register a broker callback at all — both require https,
+    # and keycloak.k3s.fitmate is plain HTTP on a private host (this is what blocks IN-14).
+    #
+    # Adding a hostname here also creates its proxied CNAME automatically (one per ingress entry).
+    # Both are ACCESS-GATED — see the cloudflare-access unit. A dev IdP holds seeded test users and
+    # is the env most likely to be running an unpatched Keycloak mid-upgrade; it has exactly one
+    # class of user (us), so there is no reason for the internet to reach its login page.
+    { hostname = "auth.dev.fitmate.me", service = local.traefik }, # Keycloak dev (Access-gated)
+    { hostname = "auth.stg.fitmate.me", service = local.traefik }, # Keycloak stg (Access-gated)
   ]
 }
