@@ -17,10 +17,12 @@ locals {
   environment  = "prod"
   cluster_name = "fitmate"
 
-  # Cloudflare API token for the PROD-ONLY edge units (cloudflare-tunnel / cloudflare-access, read as
+  # Cloudflare API token for THIS env's edge units (cloudflare-tunnel / cloudflare-access, read as
   # local.environment_vars.locals.cloudflare_api_token). From the CLOUDFLARE_API_TOKEN env
-  # (.envrc.local / deploy-env.bash). prod diverges from the shared per-env template here because it
-  # is the only tier that carries the edge stack — this was dropped when env.hcl was regenerated.
+  # (.envrc.local / deploy-env.bash).
+  # NOTE (2026-08-22, IN-15): prod is NO LONGER the only tier carrying an edge stack — dev and stg
+  # now own their own tunnel + connector so each env's Keycloak hostname stamps its own `iss`.
+  # This local is therefore present in all three env.hcl files, not just here.
   cloudflare_api_token = get_env("CLOUDFLARE_API_TOKEN", "")
 
   # Realm name for this env on the shared Keycloak (matches keycloak/fitmate unit): fitmate-<env>,
