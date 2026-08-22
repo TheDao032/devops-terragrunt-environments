@@ -43,6 +43,12 @@ include "keycloak" {
 inputs = {
   keycloak_url = local.keycloak_url
 
+  # Browser-facing host for the broker-callback OUTPUT (IN-14). keycloak_url above is the
+  # in-cluster ADMIN address the Terraform provider talks to; a provider redirects a BROWSER,
+  # and Google/Facebook both require https — so rendering callbacks from keycloak_url handed
+  # out a redirect_uri that could never match. Output-only; changes no resource.
+  public_base_url = "https://auth-dev.fitmate.me"
+
   realm = {
     # One shared Keycloak instance, one realm PER ENV: fitmate-dev / fitmate-stg, and plain `fitmate`
     # for prod. Token issuer = http://keycloak.k3s.fitmate/realms/<this name> (per-env <svc>/params).
