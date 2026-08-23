@@ -24,6 +24,24 @@ locals {
   # Automatically load environment-level variables
   environment_vars = read_terragrunt_config(find_in_parent_folders("env.hcl"))
   environment      = local.environment_vars.locals.environment
+
+  # ── Terraform state location (IN-12) ────────────────────────────────────────────────────────────
+  # State lives OUTSIDE the repository and outside .terragrunt-cache.
+  #
+  # It used to land in .terragrunt-cache/<hash>/.../terraform.tfstate — a directory that terragrunt
+  # regenerates, that tooling cleans, and that every guide says is safe to delete. It is not:
+  # deleting one does not lose the resources, it ORPHANS them. Vault policies, Keycloak realms and
+  # clients, Postgres databases, and Cloudflare tunnels/DNS/Access apps that live outside the
+  # cluster entirely. The next apply then tries to CREATE them again, which for a Cloudflare tunnel
+  # or a Keycloak client is a duplicate or a hard failure, not a no-op. Recovery is a hand-written
+  # `import` per resource. This has already happened once in this project.
+  #
+  # Outside the REPO, not merely outside the cache, because this workspace has already been
+  # relocated by cloning fresh from origin — which would have silently taken in-repo state with it.
+  # .gitignore does protect against committing it, but not against a re-clone.
+  #
+  # Override with TF_STATE_ROOT (e.g. to point several checkouts at one state tree).
+  state_root = get_env("TF_STATE_ROOT", "${get_env("HOME")}/.terragrunt-state/devops-terragrunt-environments")
 }
 
 # required_version ONLY. Provider requirements + configs are split into per-provider partials that
@@ -37,6 +55,20 @@ generate "versions" {
   contents  = <<EOF
 terraform {
   required_version = ">= 1.11.2, < 2.0.0"
+}
+EOF
+}
+
+# Generate the backend. One state file per unit, keyed by its path relative to this root, so the
+# layout on disk mirrors the layout in the repo and a unit's state is findable by eye.
+generate "backend" {
+  path      = "backend.tf"
+  if_exists = "overwrite_terragrunt"
+  contents  = <<EOF
+terraform {
+  backend "local" {
+    path = "${local.state_root}/${path_relative_to_include()}/terraform.tfstate"
+  }
 }
 EOF
 }
