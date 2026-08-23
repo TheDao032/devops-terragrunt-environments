@@ -3,6 +3,34 @@ locals {
   environment      = local.environment_vars.locals.environment
 
   keycloak_url = get_env("KEYCLOAK_URL", "http://keycloak.k3s.fitmate")
+
+  # ── e2e test harness client (IN-17) — NON-PROD ONLY ─────────────────────────────────────────
+  # The ONLY client in the realm with the password grant enabled, and it exists for exactly one
+  # reason: to make "does a real token get accepted by a real service?" a script instead of a
+  # browser ritual. That assertion is the one that matters most and was, until now, the only one
+  # that could not be automated — which is precisely how IN-16 survived undetected.
+  #
+  # ⚠️ It is appended by a `local.environment == "prod" ? [] : [...]` guard below, NOT written
+  # inline. A confidential client with direct grants bypasses PKCE, MFA and brokered social login
+  # and is a standing credential-stuffing target. Gating it structurally means prod cannot acquire
+  # it by someone forgetting — the config makes it impossible, rather than the reviewer catching it.
+  #
+  # standard_flow stays OFF: this client must never appear in a browser. service_accounts stays
+  # OFF: it acts as a USER (trainee1), not as itself — a machine identity would test the wrong
+  # thing entirely.
+  e2e_clients = local.environment == "prod" ? [] : [
+    {
+      client_id                    = "fitmate-e2e-test"
+      name                         = "FITMate e2e test harness (NON-PROD ONLY)"
+      access_type                  = "CONFIDENTIAL" # secret pushed to Vault below, never to .envrc
+      standard_flow_enabled        = false          # never used in a browser
+      direct_access_grants_enabled = true           # THE reason this client exists
+      service_accounts_enabled     = false          # acts as a user, not as itself
+      # Same aud as every other client — Keycloak's default is `account`, which every FitMate
+      # service rejects. Without this the harness would fail on audience and mask an issuer bug.
+      audiences = ["fitmate-backend"]
+    },
+  ]
 }
 
 terraform {
@@ -57,7 +85,7 @@ inputs = {
     # must gate on `administrator` in realm_access.roles. (keycloak/keycloak#43579, #44371)
     roles = ["trainee", "trainer", "administrator", "super_admin"]
 
-    clients = [
+    clients = concat([
       {
         client_id                       = "fitmate-website"
         name                            = "FITMate Website (BFF)"
@@ -88,7 +116,7 @@ inputs = {
         # Its own tokens must carry aud=fitmate-backend like every other client (KC default is `account`).
         audiences = ["fitmate-backend"]
       },
-    ]
+    ], local.e2e_clients)
 
     # e2e test user. firstName/lastName/email/email_verified are REQUIRED for a password-grant
     # fixture — Keycloak 26's declarative user profile otherwise triggers VERIFY_PROFILE at login and
@@ -188,13 +216,19 @@ inputs = {
   vault_push = {
     enabled = true
     mount   = "fitmate" # the shared org KV mount
-    clients = {
+    clients = merge({
       # env-scoped folder inside the mount → fitmate/data/<env>/website/creds
       "fitmate-website" = { path = "${local.environment}/website/creds", key = "AUTH_KEYCLOAK_SECRET" }
       # admin-service's Admin-API client secret → ESO → the fitmate-admin-<env> namespace.
       # Its OWN path (not admin/params): vault_kv_secret_v2 manages a path's whole data map, so
       # writing into admin/params would clobber every other param key.
       "fitmate-admin-backend" = { path = "${local.environment}/admin/keycloak/creds", key = "KEYCLOAK_CLIENTSECRET" }
-    }
+      }, local.environment == "prod" ? {} : {
+      # e2e harness secret (IN-17). Its OWN path — vault_kv_secret_v2 manages a path's whole data
+      # map, so writing into an existing params path would clobber every other key there.
+      # Vault, not .envrc.local: the harness runs in CI, and a hand-copied secret is one that
+      # eventually gets pasted somewhere it shouldn't be.
+      "fitmate-e2e-test" = { path = "${local.environment}/e2e/keycloak/creds", key = "KEYCLOAK_CLIENTSECRET" }
+    })
   }
 }
