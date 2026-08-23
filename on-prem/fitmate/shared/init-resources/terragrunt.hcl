@@ -110,6 +110,28 @@ inputs = {
   # app's own `routing` block; Vault has none (it's on an Ingress, not Gateway API).
   route_type = "traefik"
 
+  # ── Split-horizon DNS (IN-16 stage 2) ─────────────────────────────────────────────────────────
+  # In-cluster callers resolve the PUBLIC auth hostnames to Traefik instead of Cloudflare, so a pod
+  # refreshing a token does not meet the Cloudflare Access login page. The issuer STRING is
+  # unchanged, so `iss` still matches what every service is configured to accept.
+  #
+  # Rewrites to the SERVICE NAME, not a ClusterIP, so it survives Traefik's Service being recreated.
+  #
+  # ⚠️ This only works because Traefik now serves a real Let's Encrypt certificate for these names
+  # (traefik_conf.public_host_certs). Without that, DNS alone sends the pod to a listener presenting
+  # TRAEFIK DEFAULT CERT and the call dies on certificate verification instead — a new failure
+  # wearing the old one's clothes.
+  #
+  # ⚠️ This affects EVERY pod resolving these names. That is intended, but it means nothing inside
+  # the cluster can reach the Cloudflare path for these hostnames any more — including anything that
+  # legitimately wanted the Access gate.
+  coredns_custom_conf = {
+    rewrites = [
+      { from = "auth-dev.fitmate.me", to = "traefik.traefik.svc.cluster.local" },
+      { from = "auth-stg.fitmate.me", to = "traefik.traefik.svc.cluster.local" },
+    ]
+  }
+
   # Controller + CRDs, self-signed issuers, PLUS an ACME DNS-01 ClusterIssuer (IN-16 follow-up).
   #
   # This block previously said "No ACME/Cloudflare here" because cert-manager deploys BEFORE Vault.
