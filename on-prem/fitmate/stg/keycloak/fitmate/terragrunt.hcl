@@ -43,6 +43,12 @@ include "keycloak" {
 inputs = {
   keycloak_url = local.keycloak_url
 
+  # Browser-facing host for the broker-callback OUTPUT (IN-14). keycloak_url above is the
+  # in-cluster ADMIN address the Terraform provider talks to; a provider redirects a BROWSER,
+  # and Google/Facebook both require https — so rendering callbacks from keycloak_url handed
+  # out a redirect_uri that could never match. Output-only; changes no resource.
+  public_base_url = "https://auth-stg.fitmate.me"
+
   realm = {
     # One shared Keycloak instance, one realm PER ENV: fitmate-dev / fitmate-stg, and plain `fitmate`
     # for prod. Token issuer = http://keycloak.k3s.fitmate/realms/<this name> (per-env <svc>/params).
@@ -102,6 +108,40 @@ inputs = {
         email_verified = true
         realm_roles    = ["trainee"]
       },
+    ]
+
+    # ── Social login (IN-14) ────────────────────────────────────────────────────────────────────
+    # Google as a realm IDENTITY PROVIDER. Keycloak brokers the OAuth exchange and issues a NORMAL
+    # Keycloak JWT, so no service changes: browser -> Keycloak -> Google -> Keycloak -> JWT.
+    #
+    # ⚠️ TOKENS MINTED HERE CARRY iss = https://auth-stg.fitmate.me/realms/fitmate-stg, because
+    # hostname.strict=false makes Keycloak derive the issuer from X-Forwarded-Host. stg/env.hcl
+    # still sets KEYCLOAK_ISSUER to the in-cluster host, so services will REJECT such a token with
+    # an exact-string issuer mismatch (go-oidc NewVerifier compares byte-for-byte). See IN-16 —
+    # social login is not usable end-to-end in stg until that is resolved, even though the login
+    # itself will succeed and Keycloak will report everything healthy.
+    #
+    # ⚠️ trust_email = false is a SECURITY choice, not a default to inherit — ADR 2026-08-21.
+    identity_providers = [
+      {
+        alias = "google"
+        # DEDICATED client `FITMate Keycloak — stg` (created 2026-08-23). Its OWN client, not shared
+        # with dev or the Firebase auto-created client: a leaked stg secret must not log anyone into
+        # another env. See 30-references/runbook-google-facebook-oauth-clients-per-env.
+        client_id = "290257968475-hce0udono8a73edh1d2e2nld822rne24.apps.googleusercontent.com"
+        # ⚠️ _STG suffix, NOT a bare GOOGLE_CLIENTSECRET. One shared variable can only hold one env's
+        # secret, and applying stg while it holds dev's value gives a SUCCESSFUL apply and a login
+        # that fails at the provider. An unset variable yields "" and the module SKIPS the provider
+        # (see the `identity_providers_skipped` output) rather than creating one with a blank secret.
+        client_secret  = get_env("GOOGLE_CLIENTSECRET_STG", "")
+        default_scopes = "openid profile email"
+        trust_email    = false
+        sync_mode      = "IMPORT"
+      },
+      # Facebook: DEFERRED to a post-launch phase (2026-08-23, owner's call). To add, create a
+      # `FitMate stg` TEST APP under the `FitMate Prod` parent and register
+      #   https://auth-stg.fitmate.me/realms/fitmate-stg/broker/facebook/endpoint
+      # on the test app itself — parent settings do NOT propagate after creation.
     ]
   }
 
