@@ -169,36 +169,87 @@ inputs = {
     }
     routing = {
       httproutes = [
+        # ── ONE ROUTE PER HOSTNAME, each PINNING its own forwarded headers (IN-20) ──────────────
+        #
+        # This used to be a single route listing all three hostnames, with a comment claiming the
+        # hostname list was "the ONLY thing stopping host-header injection from forging an issuer".
+        # That claim was TESTED ON 2026-08-23 AND IS FALSE, so do not restore it:
+        #
+        #   the allow-list gates the `Host` header. Keycloak derives `iss` from `X-Forwarded-Host`.
+        #   Those are different headers, and nothing forced them to agree.
+        #
+        # A request with a legal `Host` (so it routes) and a forged `X-Forwarded-Host` (so Keycloak
+        # believes it) produced, from a laptop with NO cluster access:
+        #
+        #   curl -H "Host: auth-dev.fitmate.me" -H "X-Forwarded-Host: evil.attacker.example" \
+        #        http://<traefik-lb>/realms/fitmate-dev/.well-known/openid-configuration
+        #   -> "issuer": "https://evil.attacker.example/realms/fitmate-dev"
+        #
+        # Traefik was supposed to reject those headers from untrusted sources — trustedIPs is the
+        # pod CIDR — but k3s serves type=LoadBalancer through klipper (svclb) pods that SNAT every
+        # external packet into that CIDR. So "trust in-cluster callers" really means "trust anyone
+        # who can reach the LB IP", and the config gives no hint of it.
+        #
+        # The fix is to stop deciding whose headers to trust and pin them per hostname instead.
+        # `set` overwrites whatever arrived, so a forged value cannot survive.
+        #
+        # ⚠️ ONE hostname per route is REQUIRED, not stylistic — the module validates it. A route
+        # pinning X-Forwarded-Host for two hostnames would stamp the second with the first's
+        # identity. To publish a new host, ADD A ROUTE; never append to an existing route's list.
+        # NEVER use a wildcard hostname.
         {
-          name              = "keycloak"
+          # In-cluster/lab access. Deliberately pinned to http: nothing serves TLS inside the
+          # cluster, and per ADR 2026-08-23-public-host-is-canonical-token-issuer this host must
+          # not mint user tokens anyway. Terraform's keycloak provider and JWKS fetches use it.
+          name              = "keycloak-cluster"
           namespace         = "keycloak"
           gateway_name      = "traefik-gateway"
           gateway_namespace = "traefik"
           section_name      = "web"
-          # ⚠️ THIS LIST IS A SECURITY BOUNDARY, not just routing (IN-15 phase 3).
-          # With hostname_dynamic = true above, Keycloak derives `iss` from X-Forwarded-Host — so it
-          # will stamp whatever host reaches it. Traefik only forwards Hosts listed here; an
-          # unlisted Host does not route at all. That is the ONLY thing stopping host-header
-          # injection from forging an issuer.
-          # NEVER add a wildcard here. Every entry must be a hostname we deliberately publish.
-          #
-          # keycloak.k3s.fitmate — in-cluster/lab access, unchanged (this is what keeps phase 2 a
-          #                        no-op: requests on this host derive the same issuer as before).
-          # auth.dev/stg         — reached via THAT ENV'S OWN Cloudflare tunnel (dev/cloudflare-tunnel,
-          #                        stg/cloudflare-tunnel), Access-gated, so each env
-          #                        stamps its own correct issuer:
-          #                          auth-dev.fitmate.me -> iss https://auth-dev.fitmate.me/realms/fitmate-dev
-          #                        which is what makes the Google/Facebook broker callbacks
-          #                        registrable at all (both providers require https).
-          hostnames = [
-            "keycloak.k3s.${local.cluster_suffix}",
-            "auth-dev.fitmate.me",
-            "auth-stg.fitmate.me",
-          ]
-          path_prefix  = "/"
-          backend_name = "keycloak-service"
-          backend_port = 8080
-        }
+          hostnames         = ["keycloak.k3s.${local.cluster_suffix}"]
+          path_prefix       = "/"
+          backend_name      = "keycloak-service"
+          backend_port      = 8080
+          request_headers = {
+            "X-Forwarded-Host"  = "keycloak.k3s.${local.cluster_suffix}"
+            "X-Forwarded-Proto" = "http"
+          }
+        },
+        {
+          # dev public host, reached via dev's own Cloudflare tunnel (Access-gated).
+          # Pinning Proto=https does double duty: it is the correct value for browser traffic
+          # (Cloudflare terminates TLS), AND it makes split-horizon DNS viable for IN-16 — an
+          # in-cluster pod calling http://auth-dev.fitmate.me would otherwise get an http issuer
+          # and mismatch the https one a browser login produces.
+          name              = "keycloak-auth-dev"
+          namespace         = "keycloak"
+          gateway_name      = "traefik-gateway"
+          gateway_namespace = "traefik"
+          section_name      = "web"
+          hostnames         = ["auth-dev.fitmate.me"]
+          path_prefix       = "/"
+          backend_name      = "keycloak-service"
+          backend_port      = 8080
+          request_headers = {
+            "X-Forwarded-Host"  = "auth-dev.fitmate.me"
+            "X-Forwarded-Proto" = "https"
+          }
+        },
+        {
+          name              = "keycloak-auth-stg"
+          namespace         = "keycloak"
+          gateway_name      = "traefik-gateway"
+          gateway_namespace = "traefik"
+          section_name      = "web"
+          hostnames         = ["auth-stg.fitmate.me"]
+          path_prefix       = "/"
+          backend_name      = "keycloak-service"
+          backend_port      = 8080
+          request_headers = {
+            "X-Forwarded-Host"  = "auth-stg.fitmate.me"
+            "X-Forwarded-Proto" = "https"
+          }
+        },
       ]
     }
   }
