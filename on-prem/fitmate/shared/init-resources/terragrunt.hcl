@@ -91,9 +91,13 @@ inputs = {
     #
     # ⚠️ Nothing consumes these certificates yet. Stage 1 issues them and stops there, so the ACME
     # chain can be proven on its own before any routing or DNS is touched.
+    #
+    # issuer: the PRODUCTION ClusterIssuer. Changing issuerRef on a Certificate is what triggers
+    # cert-manager to re-issue, so moving these from the staging issuer to the production one
+    # replaces the untrusted staging certs automatically — no secret deletion, no manual renew.
     public_host_certs = [
-      { name = "auth-dev.fitmate.me" },
-      { name = "auth-stg.fitmate.me" },
+      { name = "auth-dev.fitmate.me", issuer = "letsencrypt-dns01-prod" },
+      { name = "auth-stg.fitmate.me", issuer = "letsencrypt-dns01-prod" },
     ]
 
     # Traefik dashboard is now exposed by the CHART's built-in IngressRoute
@@ -132,15 +136,31 @@ inputs = {
         # Verified 2026-08-23: this token is DENIED on tunnel, access and billing endpoints.
         api_token = get_env("CLOUDFLARE_CERTMANAGER_TOKEN", "")
 
-        email       = "nthedao2705@gmail.com"
-        issuer_name = "letsencrypt-dns01"
+        email = "nthedao2705@gmail.com"
 
-        # ⚠️ STAGING FIRST. Production has rate limits that are easy to burn while iterating on a
-        # solver config, and a lockout blocks this for a week. Staging proves the entire chain —
-        # token scope, DNS-01 TXT write, order validation, issuance — and the ONLY thing it cannot
-        # prove is that a pod trusts the result. Flip to the production directory once staging
-        # issues cleanly, then re-issue.
-        acme_server = "https://acme-staging-v02.api.letsencrypt.org/directory"
+        # BOTH issuers exist, deliberately. The staging one is not removed after the production one
+        # works: it is how any FUTURE certificate gets proven without spending production quota, and
+        # deleting it would mean the next person has to rebuild it under time pressure.
+        #
+        # Staging validated end-to-end 2026-08-23 — order `valid`, Certificate READY, and the issued
+        # cert carried CN=auth-dev.fitmate.me, SAN DNS:auth-dev.fitmate.me, issuer
+        # "(STAGING) Dastardly Durum YR1". That proved token scope, TXT write, order validation and
+        # issuance. The single thing staging CANNOT prove is that a pod trusts the result, which is
+        # the whole reason to move to production rather than a reason to have started there.
+        #
+        # ⚠️ Production has a limit of 50 certificates per registered domain per week. Two hosts is
+        # nothing, but re-issuing in a loop while debugging is how that gets spent — debug on
+        # staging by pointing a Certificate's issuer back at the staging issuer.
+        issuers = [
+          {
+            name   = "letsencrypt-dns01"
+            server = "https://acme-staging-v02.api.letsencrypt.org/directory"
+          },
+          {
+            name   = "letsencrypt-dns01-prod"
+            server = "https://acme-v02.api.letsencrypt.org/directory"
+          },
+        ]
 
         # Restrict the solver to our zone so a stray Certificate for some other domain cannot
         # quietly consume this issuer.
