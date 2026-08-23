@@ -213,6 +213,9 @@ inputs = {
           request_headers = {
             "X-Forwarded-Host"  = "keycloak.k3s.${local.cluster_suffix}"
             "X-Forwarded-Proto" = "http"
+            # Port must be pinned alongside Proto — see the auth-dev route for why. 80 is the
+            # default for http, so Keycloak omits it: iss = http://keycloak.k3s.fitmate/...
+            "X-Forwarded-Port" = "80"
           }
         },
         {
@@ -233,6 +236,14 @@ inputs = {
           request_headers = {
             "X-Forwarded-Host"  = "auth-dev.fitmate.me"
             "X-Forwarded-Proto" = "https"
+            # ⚠️ PINNING Proto WITHOUT Port PRODUCES A BROKEN ISSUER. Keycloak builds the issuer
+            # from Host + Proto + PORT, and includes the port whenever it is not the default for
+            # the scheme. Traefik's web entrypoint is :80, so pinning only Proto=https yielded
+            #     https://auth-dev.fitmate.me:80/realms/fitmate-dev
+            # which fails the services' byte-for-byte issuer check exactly like the original
+            # IN-16 mismatch. 443 is the default for https, so pinning it makes Keycloak omit it:
+            #     https://auth-dev.fitmate.me/realms/fitmate-dev
+            "X-Forwarded-Port" = "443"
           }
         },
         {
@@ -248,6 +259,7 @@ inputs = {
           request_headers = {
             "X-Forwarded-Host"  = "auth-stg.fitmate.me"
             "X-Forwarded-Proto" = "https"
+            "X-Forwarded-Port"  = "443"
           }
         },
       ]
