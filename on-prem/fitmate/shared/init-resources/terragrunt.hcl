@@ -79,6 +79,23 @@ inputs = {
 
     common = {}
 
+    # Hostnames Traefik must be able to terminate TLS for ITSELF, instead of relying on Cloudflare
+    # to do it at the edge (IN-16 follow-up). A cert-manager Certificate is issued per entry into
+    # the traefik namespace; the resulting Secret is named after the host with dots replaced.
+    #
+    # WHY: the website's Auth.js BFF refreshes tokens SERVER-SIDE from inside the cluster, using the
+    # issuer URL (https://auth-<env>.fitmate.me). Routed to Cloudflare that pod meets the Access
+    # login page instead of a token. Routed to Traefik instead, it needs Traefik to present a cert
+    # for that name — otherwise the call dies with "unable to get local issuer certificate", which
+    # is a NEW failure wearing the old one's clothes.
+    #
+    # ⚠️ Nothing consumes these certificates yet. Stage 1 issues them and stops there, so the ACME
+    # chain can be proven on its own before any routing or DNS is touched.
+    public_host_certs = [
+      { name = "auth-dev.fitmate.me" },
+      { name = "auth-stg.fitmate.me" },
+    ]
+
     # Traefik dashboard is now exposed by the CHART's built-in IngressRoute
     # (ingressRoute.dashboard.enabled in charts/traefik/values.yml.tftpl → host traefik.k3s.<env>),
     # so no routing entry is needed here. Add a `routing` block with httproutes /
@@ -89,8 +106,11 @@ inputs = {
   # app's own `routing` block; Vault has none (it's on an Ingress, not Gateway API).
   route_type = "traefik"
 
-  # Controller + CRDs only (self-signed issuers) — deploys BEFORE vault so its
-  # Certificate/Issuer manifests have the CRDs available. No ACME/Cloudflare here.
+  # Controller + CRDs, self-signed issuers, PLUS an ACME DNS-01 ClusterIssuer (IN-16 follow-up).
+  #
+  # This block previously said "No ACME/Cloudflare here" because cert-manager deploys BEFORE Vault.
+  # That ordering constraint still holds and is exactly why the API token arrives as a Terraform
+  # parameter rather than through Vault/ESO — an ESO-delivered secret could not exist yet.
   cert_manager_conf = {
     helm = {
       chart_version = "1.16.1"
@@ -101,6 +121,31 @@ inputs = {
     }
 
     common = {
+      dns01 = {
+        enabled = true
+
+        # ⚠️ DEDICATED, NARROWLY-SCOPED TOKEN — Zone:Zone:Read + Zone:DNS:Edit on fitmate.me ONLY.
+        # Do NOT substitute CLOUDFLARE_API_TOKEN (the tunnel/Terraform token). That one also holds
+        # `Account > Access: Apps and Policies > Edit`, and Cloudflare Access is currently the only
+        # control keeping the IN-20 header-forgery hole off the public internet — so a compromised
+        # cert-manager pod holding it could delete the policy protecting these very hostnames.
+        # Verified 2026-08-23: this token is DENIED on tunnel, access and billing endpoints.
+        api_token = get_env("CLOUDFLARE_CERTMANAGER_TOKEN", "")
+
+        email       = "nthedao2705@gmail.com"
+        issuer_name = "letsencrypt-dns01"
+
+        # ⚠️ STAGING FIRST. Production has rate limits that are easy to burn while iterating on a
+        # solver config, and a lockout blocks this for a week. Staging proves the entire chain —
+        # token scope, DNS-01 TXT write, order validation, issuance — and the ONLY thing it cannot
+        # prove is that a pod trusts the result. Flip to the production directory once staging
+        # issues cleanly, then re-issue.
+        acme_server = "https://acme-staging-v02.api.letsencrypt.org/directory"
+
+        # Restrict the solver to our zone so a stray Certificate for some other domain cannot
+        # quietly consume this issuer.
+        zones = ["fitmate.me"]
+      }
     }
   }
 
