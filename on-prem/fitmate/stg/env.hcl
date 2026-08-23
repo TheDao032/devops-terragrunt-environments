@@ -28,10 +28,35 @@ locals {
   # or plain `fitmate` for prod. Used to build the per-service token issuer/JWKS URLs below.
   realm_name = local.environment == "prod" ? "fitmate" : "fitmate-${local.environment}"
 
-  # Browser-facing issuer host (must equal token `iss`). prod is exposed publicly via Cloudflare
-  # (auth.fitmate.me); dev/stg use the in-cluster Traefik host. JWKS always uses the in-cluster
-  # Service URL (pods can't resolve the ingress host).
-  issuer_host = local.environment == "prod" ? "https://auth.fitmate.me" : "http://keycloak.k3s.fitmate"
+  # Browser-facing issuer host — must equal the token's `iss` claim EXACTLY (IN-16, ADR
+  # 2026-08-23-public-host-is-canonical-token-issuer).
+  #
+  # Keycloak runs with hostname.strict=false, so it does NOT have one fixed issuer: it builds `iss`
+  # from the request's X-Forwarded-Proto/Host. The issuer therefore follows whichever host minted
+  # the token, and one Keycloak legitimately emits several:
+  #     via Cloudflare        -> https://auth-<env>.fitmate.me/realms/<realm>
+  #     via the cluster host  -> http://keycloak.k3s.fitmate/realms/<realm>
+  #
+  # Services compare `iss` with go-oidc's NewVerifier, which is a byte-for-byte string comparison —
+  # no scheme tolerance, no host aliasing, a trailing slash is enough to fail. So a single expected
+  # issuer is only correct if EVERY token for this env is minted through ONE host.
+  #
+  # That host must be the PUBLIC one, and this is forced rather than preferred: the website's Auth.js
+  # provider discovers against this value and then REDIRECTS THE BROWSER to the authorization_endpoint
+  # the discovery document returns. Discovery via the cluster host returns cluster URLs, so the browser
+  # would be sent to http://keycloak.k3s.fitmate/... which no browser can resolve.
+  #
+  # The previous non-prod special case encoded "dev and stg are internal-only". That stopped being true
+  # when IN-15 gave them public hostnames, and the stale value silently rejected every browser-minted
+  # token — a 401 on a token that was correctly signed, unexpired and correctly audienced.
+  #
+  # ⚠️ Tokens minted through the in-cluster host are now REJECTED BY DESIGN. That host stays valid for
+  # JWKS and for Terraform's admin access; it must not be used to obtain a user token. Verify with
+  # `devops-tools/scripts/keycloak/e2e-verify.sh --mint-host public` — a `cluster` mint must now FAIL.
+  #
+  # JWKS is unaffected below: it is FETCHED, never COMPARED, so it stays on the in-cluster Service URL
+  # (pods cannot resolve the public host). Do not "make these consistent".
+  issuer_host = local.environment == "prod" ? "https://auth.fitmate.me" : "https://auth-${local.environment}.fitmate.me"
 
   secrets = {
     # ── Per-app GHCR image-pull creds (value = the GitHub read:packages PAT). Per-env folder so each
