@@ -206,10 +206,12 @@ inputs = {
           gateway_name      = "traefik-gateway"
           gateway_namespace = "traefik"
           section_name      = "web"
-          hostnames         = ["keycloak.k3s.${local.cluster_suffix}"]
-          path_prefix       = "/"
-          backend_name      = "keycloak-service"
-          backend_port      = 8080
+          # Deliberately NOT attached to `websecure`: nothing serves this name over TLS, and a
+          # listener advertising it would hand out an issuer for a scheme that does not exist here.
+          hostnames    = ["keycloak.k3s.${local.cluster_suffix}"]
+          path_prefix  = "/"
+          backend_name = "keycloak-service"
+          backend_port = 8080
           request_headers = {
             "X-Forwarded-Host"  = "keycloak.k3s.${local.cluster_suffix}"
             "X-Forwarded-Proto" = "http"
@@ -228,11 +230,15 @@ inputs = {
           namespace         = "keycloak"
           gateway_name      = "traefik-gateway"
           gateway_namespace = "traefik"
-          section_name      = "web"
-          hostnames         = ["auth-dev.fitmate.me"]
-          path_prefix       = "/"
-          backend_name      = "keycloak-service"
-          backend_port      = 8080
+          # BOTH listeners (IN-16 stage 2). `web` carries browser traffic arriving via
+          # Cloudflare -> cloudflared (plain HTTP); `websecure` carries in-cluster callers that
+          # resolve this hostname to Traefik and connect over real TLS. Attaching to only one means
+          # the other path 404s while the Gateway, the route and the pods all report healthy.
+          section_names = ["web", "websecure"]
+          hostnames     = ["auth-dev.fitmate.me"]
+          path_prefix   = "/"
+          backend_name  = "keycloak-service"
+          backend_port  = 8080
           request_headers = {
             "X-Forwarded-Host"  = "auth-dev.fitmate.me"
             "X-Forwarded-Proto" = "https"
@@ -251,11 +257,15 @@ inputs = {
           namespace         = "keycloak"
           gateway_name      = "traefik-gateway"
           gateway_namespace = "traefik"
-          section_name      = "web"
-          hostnames         = ["auth-stg.fitmate.me"]
-          path_prefix       = "/"
-          backend_name      = "keycloak-service"
-          backend_port      = 8080
+          # BOTH listeners (IN-16 stage 2). `web` carries browser traffic arriving via
+          # Cloudflare -> cloudflared (plain HTTP); `websecure` carries in-cluster callers that
+          # resolve this hostname to Traefik and connect over real TLS. Attaching to only one means
+          # the other path 404s while the Gateway, the route and the pods all report healthy.
+          section_names = ["web", "websecure"]
+          hostnames     = ["auth-stg.fitmate.me"]
+          path_prefix   = "/"
+          backend_name  = "keycloak-service"
+          backend_port  = 8080
           request_headers = {
             "X-Forwarded-Host"  = "auth-stg.fitmate.me"
             "X-Forwarded-Proto" = "https"
