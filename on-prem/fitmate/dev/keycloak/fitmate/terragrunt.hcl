@@ -93,15 +93,47 @@ inputs = {
 
     clients = concat([
       {
-        client_id                       = "fitmate-website"
-        name                            = "FITMate Website (BFF)"
-        access_type                     = "CONFIDENTIAL" # issues a client_secret (Auth.js BFF holds it)
-        standard_flow_enabled           = true           # Authorization Code
-        direct_access_grants_enabled    = false
-        pkce_code_challenge_method      = "S256"
-        valid_redirect_uris             = ["http://localhost:3000/api/auth/callback/keycloak"]
-        valid_post_logout_redirect_uris = ["http://localhost:3000"]
-        web_origins                     = ["http://localhost:3000"]
+        client_id                    = "fitmate-website"
+        name                         = "FITMate Website (BFF)"
+        access_type                  = "CONFIDENTIAL" # issues a client_secret (Auth.js BFF holds it)
+        standard_flow_enabled        = true           # Authorization Code
+        direct_access_grants_enabled = false
+        pkce_code_challenge_method   = "S256"
+        # ── Redirect URIs: the DEPLOYED dev origin, alongside the local one (spec 066 T088) ──────
+        # Keycloak matches redirect_uri EXACTLY against this allowlist. Auth.js does not guess the
+        # callback from X-Forwarded-* — it rewrites every request's origin to AUTH_URL
+        # (`reqWithEnvURL`), so the callback it sends is deterministically AUTH_URL + the provider
+        # path. fitmate-gitops apps/website/dev/values.yaml:72 sets
+        #     AUTH_URL: https://web-dev.fitmate.me
+        # (merged, PR #82), which makes the deployed callback exactly the URI added below.
+        #
+        # Verified against the live realm 2026-08-24: only the localhost URI was registered, so
+        # https://web-dev.fitmate.me/api/auth/callback/keycloak returned HTTP 400
+        # "Invalid parameter: redirect_uri". That failure is 100% of sign-ins on the FIRST deployed
+        # rollout, and it surfaces on Keycloak's OWN error page while the website pod sits
+        # 1/1 Running with clean logs — so it reads as a website bug and is not one.
+        #
+        # localhost:3000 is KEPT, not replaced: it is how the app is run against dev Keycloak
+        # locally, and dropping it would trade one broken environment for another.
+        valid_redirect_uris = [
+          "http://localhost:3000/api/auth/callback/keycloak",
+          "https://web-dev.fitmate.me/api/auth/callback/keycloak",
+        ]
+        # Post-logout is a SEPARATE allowlist in Keycloak 26 — a host valid for login is NOT
+        # thereby valid for logout. Omitting it leaves sign-in working and sign-out failing with
+        # "Invalid parameter: post_logout_redirect_uri", which is the harder bug to attribute.
+        valid_post_logout_redirect_uris = [
+          "http://localhost:3000",
+          "https://web-dev.fitmate.me",
+        ]
+        # web_origins is CORS, and the BFF flow does not strictly need it: Auth.js performs the
+        # code exchange server-side (Node -> Keycloak), and logout is a browser NAVIGATION, not an
+        # XHR. Kept at parity with localhost so the two origins do not differ for an unstated
+        # reason — safe to drop both if a reviewer prefers strict least-privilege here.
+        web_origins = [
+          "http://localhost:3000",
+          "https://web-dev.fitmate.me",
+        ]
         # CRITICAL: backend services require aud contains fitmate-backend (Keycloak default aud = account).
         audiences = ["fitmate-backend"]
       },
