@@ -94,16 +94,46 @@ inputs = {
     # screen is captioned "Đăng nhập bằng email và mật khẩu". The design promised email and the
     # realm refused it; they cannot both ship.
     #
-    # ⚠️ This permits email as an ALTERNATIVE identifier — Keycloak will render "Username or email".
-    # It does NOT make the email the identity; that is `registration_email_as_username`, which also
-    # removes the username field from the sign-up form. Deliberately NOT set here: it changes the
-    # shape of a screen the fitmate agent owns, so it is theirs to decide, not ours to infer.
+    # ⚠️ On its own this permits email as an ALTERNATIVE identifier — Keycloak renders "Username or
+    # email" and accepts either. It does NOT by itself make the email the identity; that is
+    # `registration_email_as_username`, set below.
     login_with_email_allowed = true
 
     # D4 — self-service sign-up. Keycloak owns the CREDENTIAL step; the website completes the
     # profile after first sign-in. That split is forced, not tidy: trainer sign-up needs ID-card
     # images and certificate uploads, which Keycloak's registration page cannot collect.
     registration_allowed = true
+
+    # ── D4b — the email IS the identity (owner decision 2026-08-24) ──────────────────────────────
+    # Removes the separate username field from the registration form and stores the email as the
+    # username. Not a preference: the V3 auth design was MEASURED to contain zero username fields,
+    # on any screen. Without this, Keycloak's sign-up page renders a username input the design has
+    # no slot for, and the two cannot both ship.
+    #
+    # Paired with edit_username_allowed left at its default `false` — the shared module REFUSES the
+    # combination (validation in variables.tf), because a user who can edit their username can edit
+    # away the very invariant this flag establishes.
+    #
+    # 🔴 THIS BREAKS PASSWORD GRANT BY BARE USERNAME. Isolated on a throwaway realm, both rows with
+    # login_with_email_allowed = true: with this ON, `username=trainee1` is rejected with
+    # `invalid_grant / Invalid user credentials` while `username=trainee1@fitmate.local` succeeds.
+    # The seeded users' bare names stop being valid identifiers the moment this applies.
+    #
+    # ⚠️ ORDERING — this unit must be APPLIED only once devops-tools is on a revision containing
+    # scripts/keycloak/e2e-verify.sh's E2E_LOGIN_IDENTIFIER default (merged there as PR #19, base
+    # `dev`). That harness is IN-17. Applying this first turns IN-17 red with a message that looks
+    # like a credential problem rather than an identifier-shape change. Escape hatch if it does:
+    # E2E_LOGIN_IDENTIFIER=trainee1@fitmate.local (the new default), or pin the old behaviour with
+    # the bare name only while this flag is off.
+    #
+    # WHY THIS IS A SEPARATE COMMIT FROM registration_allowed ABOVE: it was originally split out as
+    # environments PR #42 precisely because it carries the cross-repo dependency on devops-tools —
+    # burying that inside an already-reviewed PR would have made the review meaningless. #42 was
+    # then merged into a STACKED branch that never itself reached `local`, so the flag was silently
+    # stranded: merge commit 116e5defca2410512c198a5554a7921c4dcad86d is not an ancestor of
+    # origin/local, and GitHub never retargeted the child because the parent branch was not deleted
+    # on merge. This commit is the rescue. See the note in 50-conversations for the full trace.
+    registration_email_as_username = true
 
     # 🔴 reset_password_allowed and verify_email are deliberately LEFT OFF — they are blocked on
     # SMTP, not on a decision. Verified 2026-08-24: this realm's `smtpServer` is `{}` and the shared
