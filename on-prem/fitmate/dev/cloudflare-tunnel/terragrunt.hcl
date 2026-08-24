@@ -90,7 +90,43 @@ inputs = {
   # in that file. Access gating lives in ../cloudflare-access.
   #
   # Adding a route here also creates its proxied CNAME automatically (one per ingress entry).
+  #
+  # ── web-dev.fitmate.me: the WEBSITE (spec 066 T088 / SCRUM-238) ───────────────────────────────
+  # Layer 1 of three. B-W09 is not one blocker but three, each hiding the next:
+  #     1. DNS          — this entry; the hostname did not resolve AT ALL (dig returned nothing)
+  #     2. tunnel route — this entry; the tunnel advertised only auth-dev
+  #     3. Keycloak     — the redirect_uri allowlist (environments PR #40)
+  # Fixing any one alone just moves the failure. This unit closes 1 and 2 together, because a
+  # cloudflared ingress entry creates its proxied CNAME as a side effect.
+  #
+  # ⚠️ Same flat-name rule as auth-dev: `web-dev`, NOT `web.dev`. See the Universal SSL note above —
+  # a second label is outside `*.fitmate.me` and fails the TLS handshake with everything healthy.
+  #
+  # Points at Traefik's :80 (the `web` entrypoint), which is the ONLY listener tunnel traffic ever
+  # reaches. Traced, not assumed: Service traefik:80 name=`web` -> targetPort `web` -> Gateway
+  # listener `web` :8000. The `websecure` :8443 listener is not on this path — the keycloak route's
+  # extra websecure attachment is not what makes it work. The website chart's
+  # `route.gateway.sectionName` already defaults to `web`, so it agrees.
+  #
+  # The public URL stays https://web-dev.fitmate.me — Cloudflare terminates TLS at the edge, so
+  # this plain-HTTP in-cluster hop does not change the origin Auth.js is pinned to via AUTH_URL.
+  #
+  # ⚠️ EXPECT 404 UNTIL THE APP IS SYNCED. Verified 2026-08-24: namespace fitmate-website-dev does
+  # not exist and the overlay still has route.enabled: false. Traefik has no HTTPRoute for this
+  # Host, so the tunnel forwards into a 404. That is the correct order — reachability first, then
+  # the app — and the 404 is the signal the tunnel works. It is NOT a routing bug to chase.
+  #
+  # ⚠️ DELIBERATELY NOT Access-gated (../cloudflare-access lists hostnames explicitly, so this one
+  # is public by omission — reachability lives here, authorization lives there). That is a SECURITY
+  # DECISION, not a default: dev's auth host IS gated on the reasoning "its only users are us."
+  # The same argument applies to a dev website holding seeded data, and it is raised with the app
+  # track rather than settled here. Gating it later is one line in that unit.
+  #
+  # ℹ️ Note for whoever tests the login: auth-dev.fitmate.me IS Access-gated to a single email, so
+  # the sign-in redirect meets a Cloudflare challenge BEFORE Keycloak's login page. Expected, and
+  # it means a test with any other identity fails at Cloudflare rather than at Keycloak.
   routes = [
     { hostname = "auth-dev.fitmate.me", service = "http://traefik.traefik.svc.cluster.local:80" },
+    { hostname = "web-dev.fitmate.me", service = "http://traefik.traefik.svc.cluster.local:80" },
   ]
 }
