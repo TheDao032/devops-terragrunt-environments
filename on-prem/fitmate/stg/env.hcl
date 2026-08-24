@@ -64,6 +64,21 @@ locals {
     "trainee/ghcr-pull" = { username = local.backend_github_username, token = local.backend_github_token }
     "website/ghcr-pull" = { username = local.backend_github_username, token = local.backend_github_token }
 
+    # ── Auth.js session-encryption key for the website BFF (IN-11).
+    #    Its OWN path, NOT website/creds: that path is written whole-map by the keycloak stack's
+    #    `vault_kv_secret_v2.client_secret["fitmate-website"]`, which sets `disable_read = true`.
+    #    Two stacks writing one path would silently clobber each other's keys on every apply — the
+    #    same trap already called out for admin/params and the e2e path in dev/keycloak/fitmate.
+    #    The website's ESO role reads `fitmate/data/<env>/website/*`, so a sibling path needs no
+    #    policy change.
+    #
+    #    Managed rather than hand-generated because once the website has >1 replica it MUST be
+    #    identical across pods (else a session minted by pod A is undecryptable by pod B → random
+    #    intermittent logouts) and stable across restarts (else every deploy signs everyone out).
+    #    44 chars over random_password's charset ≈ 260 bits — Auth.js takes any high-entropy string.
+    "website/session" = { AUTH_SECRET = "{ _RANDOM_ = 44 }" }
+
+
     # ── PostgreSQL superuser (tf_admin) — ONE PG server backs all envs, so this is the same stable
     #    value everywhere (also in shared/env.hcl for the keycloak DB). Read by this env's database units.
     "database/superuser/creds" = {
