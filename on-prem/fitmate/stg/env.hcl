@@ -64,6 +64,22 @@ locals {
     "trainee/ghcr-pull" = { username = local.backend_github_username, token = local.backend_github_token }
     "website/ghcr-pull" = { username = local.backend_github_username, token = local.backend_github_token }
 
+    # ── Image-pull creds for services that have an ESO ROLE but had no ghcr-pull path (IN-11).
+    #    Every service in vault-auths' `eso_service_sa` map gets a role provisioned ahead of its
+    #    deployment; the matching Vault doc was only ever added for services already deployed. The
+    #    result is invisible until deploy day, when the pod reports ImagePullBackOff — which reads as
+    #    a registry/credential fault and is actually a missing Vault path. Restores role↔secret parity.
+    "admin/ghcr-pull"         = { username = local.backend_github_username, token = local.backend_github_token }
+    "admin-website/ghcr-pull" = { username = local.backend_github_username, token = local.backend_github_token }
+    "booking/ghcr-pull"       = { username = local.backend_github_username, token = local.backend_github_token }
+    "gateway/ghcr-pull"       = { username = local.backend_github_username, token = local.backend_github_token }
+    "inquiry/ghcr-pull"       = { username = local.backend_github_username, token = local.backend_github_token }
+    "media/ghcr-pull"         = { username = local.backend_github_username, token = local.backend_github_token }
+    "notification/ghcr-pull"  = { username = local.backend_github_username, token = local.backend_github_token }
+    "payment/ghcr-pull"       = { username = local.backend_github_username, token = local.backend_github_token }
+    "trainer/ghcr-pull"       = { username = local.backend_github_username, token = local.backend_github_token }
+
+
     # ── Auth.js session-encryption key for the website BFF (IN-11).
     #    Its OWN path, NOT website/creds: that path is written whole-map by the keycloak stack's
     #    `vault_kv_secret_v2.client_secret["fitmate-website"]`, which sets `disable_read = true`.
