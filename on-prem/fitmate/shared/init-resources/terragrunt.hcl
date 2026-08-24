@@ -125,6 +125,38 @@ inputs = {
   # ⚠️ This affects EVERY pod resolving these names. That is intended, but it means nothing inside
   # the cluster can reach the Cloudflare path for these hostnames any more — including anything that
   # legitimately wanted the Access gate.
+  #
+  # ── 🔴 DO NOT DELETE THESE REWRITES: THE WEBSITE'S SIGN-IN DEPENDS ON THEM ────────────────────
+  # This block was written for token REFRESH. Since the website was onboarded it carries more than
+  # that, and the note above understates it. `services/front-end/fitmate-website/src/auth.ts` makes
+  # TWO server-side calls to the public auth host from inside the Next.js pod (named by SYMBOL, not
+  # line number, so this survives the file being reformatted):
+  #
+  #   the `Keycloak({ issuer: AUTH_KEYCLOAK_ISSUER })` provider  OIDC discovery + the
+  #                                                              AUTHORIZATION-CODE EXCHANGE
+  #   the fetch to `${issuer}/protocol/openid-connect/token`     refresh (in refreshAccessToken)
+  #
+  # The first runs during INITIAL SIGN-IN. Both are non-browser calls, and auth-<env>.fitmate.me is
+  # Cloudflare Access-gated (../../<env>/cloudflare-access), so without these rewrites they meet an
+  # Access HTML login page instead of a token endpoint. The consequence is not "sessions stop
+  # refreshing" — it is that SIGN-IN NEVER COMPLETES. The browser hop succeeds, the callback lands,
+  # and the exchange dies inside the pod.
+  #
+  # ⚠️ AND IT FAILS SILENTLY. refreshAccessToken ends in a bare `catch { return { ...token, error:
+  # 'RefreshAccessTokenError' } }`, so an HTML challenge makes res.json() throw, the catch fires,
+  # and the session is marked invalid. What a user reports is "I keep getting randomly signed out."
+  # Nothing in any log names Cloudflare, Access, or DNS. Deleting a DNS override and getting random
+  # logouts days later is a failure nobody traces back to this file — which is why the warning is
+  # here rather than only in a runbook.
+  #
+  # Verified from inside a pod, 2026-08-24 (the ConfigMap existing proves only that it exists):
+  #     nslookup auth-dev.fitmate.me  ->  10.43.85.195   = traefik.traefik ClusterIP
+  #
+  # ⚠️ The tempting "simplification" is also wrong: do NOT repoint AUTH_KEYCLOAK_ISSUER at an
+  # in-cluster host to avoid all this. Keycloak runs hostname.strict=false and derives `iss` from
+  # the host it is reached through, and every Go backend compares `iss` byte-for-byte — so that
+  # yields a GREEN LOGIN followed by a 401 on the first API call. These rewrites are precisely what
+  # lets ONE public issuer string be correct on both the browser and the pod side.
   coredns_custom_conf = {
     rewrites = [
       { from = "auth-dev.fitmate.me", to = "traefik.traefik.svc.cluster.local" },
