@@ -85,5 +85,39 @@ inputs = {
   # is unaffected — reachability lives in cloudflare-tunnel, authorization lives here.
   apps = {
     "auth-dev.fitmate.me" = { name = "Keycloak dev" }
+
+    # ── The dev WEBSITE (B-W12) ───────────────────────────────────────────────────────────────
+    # Same reasoning as the auth host above — its only users are us and it serves seeded data —
+    # but here there is code evidence, not just posture. `src/app/robots.ts` is ENVIRONMENT-BLIND:
+    # no host check, no NODE_ENV check, identical output everywhere —
+    #     allow: ["/", "/trainers"]
+    # and src/app/layout.tsx sets `robots: { index: true, follow: true }` at the ROOT layout.
+    # `createPrivateMetadata` sets index:false, but only on the private pages; the PUBLIC marketing
+    # routes are the indexable ones — and /trainers is exactly the seeded fake-trainer data.
+    #
+    # So an ungated web-dev does not merely PERMIT crawling, it actively INVITES it, onto a public
+    # duplicate of the marketing site backed by fake data. De-indexing that afterwards costs far
+    # more than this entry.
+    #
+    # ⚠️ Gating adds NO testing barrier that does not already exist: auth-dev above is gated to the
+    # same single email, so anyone who can test a sign-in today is already that identity.
+    #
+    # ⚠️ And it does NOT break the login flow. Verified 2026-08-24, both hops:
+    #   • Browser: the Auth.js callback (/api/auth/callback/keycloak) is an ordinary navigation on
+    #     THIS hostname, so it carries the CF_Authorization cookie set seconds earlier — the same
+    #     property that makes the Google broker callback work on the auth host.
+    #   • SERVER-SIDE: Auth.js exchanges the code from inside the Next.js pod against
+    #     AUTH_KEYCLOAK_ISSUER (https://auth-dev.fitmate.me/...), which is a NON-browser call and
+    #     would be challenged by Access — except IN-16's split-horizon DNS rewrites that name
+    #     in-cluster. Confirmed from a pod: auth-dev.fitmate.me -> 10.43.85.195 = Traefik's
+    #     ClusterIP, so the token exchange never reaches Cloudflare at all.
+    #     Without that split horizon this WOULD fail; do not remove coredns-custom.
+    #
+    # No split-horizon entry is needed for web-dev itself — nothing in-cluster calls the website by
+    # hostname (AUTH_URL is used to CONSTRUCT URLs, not to self-call).
+    #
+    # To make it public: delete this entry and apply. Reachability is unaffected either way — it
+    # lives in ../cloudflare-tunnel.
+    "web-dev.fitmate.me" = { name = "Website dev" }
   }
 }
