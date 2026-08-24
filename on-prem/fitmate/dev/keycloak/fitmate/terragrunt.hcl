@@ -94,11 +94,33 @@ inputs = {
     # screen is captioned "Đăng nhập bằng email và mật khẩu". The design promised email and the
     # realm refused it; they cannot both ship.
     #
-    # ⚠️ This permits email as an ALTERNATIVE identifier — Keycloak will render "Username or email".
-    # It does NOT make the email the identity; that is `registration_email_as_username`, which also
-    # removes the username field from the sign-up form. Deliberately NOT set here: it changes the
-    # shape of a screen the fitmate agent owns, so it is theirs to decide, not ours to infer.
+    # ⚠️ This permits email as an ALTERNATIVE identifier — on its own Keycloak renders
+    # "Username or email". Making the email the IDENTITY is registration_email_as_username, set
+    # immediately below (ADR-050).
     login_with_email_allowed = true
+
+    # ── ADR-050 — the email IS the username ─────────────────────────────────────────────────────
+    # Decided from the built design, not from preference: across every V3 auth screen there is no
+    # username field anywhere — not on sign-up, not on sign-in. Trainee registration collects
+    # name/phone/email/password, trainer adds bio/DOB/experience, password login takes email only.
+    # Leaving this false would not preserve an existing choice, it would force the front-end to
+    # INVENT a username field the design never had, plus rules to generate and validate it.
+    #
+    # 🔴 THIS ALSO CHANGES WHO CAN LOG IN, not just the sign-up form. It switches which identifier
+    # the password grant accepts. Measured on a scratch realm 2026-08-24 (both with
+    # login_with_email_allowed = true):
+    #
+    #   registration_email_as_username = false -> username OK,    email OK
+    #   registration_email_as_username = true  -> username FAILS,  email OK
+    #
+    # Existing users KEEP their usernames — this governs resolution, not stored data. But anything
+    # authenticating by username breaks, and Keycloak reports it as "Invalid user credentials",
+    # which is indistinguishable from a wrong password and sends the reader hunting through Vault.
+    #
+    # ⚠️ The IN-17 e2e harness authenticated as `trainee1` (username) and is the known consumer.
+    # devops-tools PR #19 switches it to trainee1@fitmate.local and MUST MERGE BEFORE THIS.
+    # trainee1's email is set in the `users` block below, so the fixture already supports it.
+    registration_email_as_username = true
 
     # D4 — self-service sign-up. Keycloak owns the CREDENTIAL step; the website completes the
     # profile after first sign-in. That split is forced, not tidy: trainer sign-up needs ID-card
