@@ -85,6 +85,44 @@ inputs = {
     display_name = "FITMate"
     ssl_required = "none" # HTTP lab: Keycloak reached at http://keycloak.k3s.fitmate via Traefik
 
+    # ── Login & registration policy (ADR-049 D3 + D4, owner decision 2026-08-24) ─────────────────
+    # The login page is rendered from realm state, so these decide what it OFFERS. Both were off,
+    # which is what the login theme work is blocked on.
+    #
+    # D3 — accept the email address as the identifier. With this off Keycloak renders the literal
+    # label "Username" and REJECTS every user who types their email, while the V3 auth design's own
+    # screen is captioned "Đăng nhập bằng email và mật khẩu". The design promised email and the
+    # realm refused it; they cannot both ship.
+    #
+    # ⚠️ This permits email as an ALTERNATIVE identifier — Keycloak will render "Username or email".
+    # It does NOT make the email the identity; that is `registration_email_as_username`, which also
+    # removes the username field from the sign-up form. Deliberately NOT set here: it changes the
+    # shape of a screen the fitmate agent owns, so it is theirs to decide, not ours to infer.
+    login_with_email_allowed = true
+
+    # D4 — self-service sign-up. Keycloak owns the CREDENTIAL step; the website completes the
+    # profile after first sign-in. That split is forced, not tidy: trainer sign-up needs ID-card
+    # images and certificate uploads, which Keycloak's registration page cannot collect.
+    registration_allowed = true
+
+    # 🔴 reset_password_allowed and verify_email are deliberately LEFT OFF — they are blocked on
+    # SMTP, not on a decision. Verified 2026-08-24: this realm's `smtpServer` is `{}` and the shared
+    # module configures no smtp_server block anywhere.
+    #   • reset_password_allowed → renders "Forgot password?" leading to a form that can never
+    #     deliver a reset mail. The V3 `/login/help` screen assumes this works; enabling it now
+    #     would make the screen reachable and non-functional, which is worse than absent.
+    #   • verify_email → hands every new registrant a VERIFY_EMAIL action satisfied only by an
+    #     email that never arrives, locking them out of the account they just created. With
+    #     registration now ON, enabling this without SMTP would break sign-up entirely.
+    # Both become one-line changes once a mail server exists. Until then, note the accepted
+    # consequence of registration-without-verification below.
+    #
+    # ⚠️ ACCEPTED FOR DEV, NOT FOR PROD: open registration + no email verification means anyone can
+    # create an account claiming ANY address, unverified. Contained here because this is a lab realm
+    # and Google remains trust_email = false (so a brokered login cannot silently inherit an account
+    # by matching an unverified address). Do NOT copy this pairing into stg/prod — those need SMTP
+    # and verify_email first.
+
     # Services gate on realm_access.roles.
     # NOTE: role is "administrator", NOT "admin" — Keycloak 26.4.0+ has an FGAP regression that blocks
     # updating a realm role literally named "admin" (403), even for a super-admin. The FitMate services
@@ -93,15 +131,47 @@ inputs = {
 
     clients = concat([
       {
-        client_id                       = "fitmate-website"
-        name                            = "FITMate Website (BFF)"
-        access_type                     = "CONFIDENTIAL" # issues a client_secret (Auth.js BFF holds it)
-        standard_flow_enabled           = true           # Authorization Code
-        direct_access_grants_enabled    = false
-        pkce_code_challenge_method      = "S256"
-        valid_redirect_uris             = ["http://localhost:3000/api/auth/callback/keycloak"]
-        valid_post_logout_redirect_uris = ["http://localhost:3000"]
-        web_origins                     = ["http://localhost:3000"]
+        client_id                    = "fitmate-website"
+        name                         = "FITMate Website (BFF)"
+        access_type                  = "CONFIDENTIAL" # issues a client_secret (Auth.js BFF holds it)
+        standard_flow_enabled        = true           # Authorization Code
+        direct_access_grants_enabled = false
+        pkce_code_challenge_method   = "S256"
+        # ── Redirect URIs: the DEPLOYED dev origin, alongside the local one (spec 066 T088) ──────
+        # Keycloak matches redirect_uri EXACTLY against this allowlist. Auth.js does not guess the
+        # callback from X-Forwarded-* — it rewrites every request's origin to AUTH_URL
+        # (`reqWithEnvURL`), so the callback it sends is deterministically AUTH_URL + the provider
+        # path. fitmate-gitops apps/website/dev/values.yaml:72 sets
+        #     AUTH_URL: https://web-dev.fitmate.me
+        # (merged, PR #82), which makes the deployed callback exactly the URI added below.
+        #
+        # Verified against the live realm 2026-08-24: only the localhost URI was registered, so
+        # https://web-dev.fitmate.me/api/auth/callback/keycloak returned HTTP 400
+        # "Invalid parameter: redirect_uri". That failure is 100% of sign-ins on the FIRST deployed
+        # rollout, and it surfaces on Keycloak's OWN error page while the website pod sits
+        # 1/1 Running with clean logs — so it reads as a website bug and is not one.
+        #
+        # localhost:3000 is KEPT, not replaced: it is how the app is run against dev Keycloak
+        # locally, and dropping it would trade one broken environment for another.
+        valid_redirect_uris = [
+          "http://localhost:3000/api/auth/callback/keycloak",
+          "https://web-dev.fitmate.me/api/auth/callback/keycloak",
+        ]
+        # Post-logout is a SEPARATE allowlist in Keycloak 26 — a host valid for login is NOT
+        # thereby valid for logout. Omitting it leaves sign-in working and sign-out failing with
+        # "Invalid parameter: post_logout_redirect_uri", which is the harder bug to attribute.
+        valid_post_logout_redirect_uris = [
+          "http://localhost:3000",
+          "https://web-dev.fitmate.me",
+        ]
+        # web_origins is CORS, and the BFF flow does not strictly need it: Auth.js performs the
+        # code exchange server-side (Node -> Keycloak), and logout is a browser NAVIGATION, not an
+        # XHR. Kept at parity with localhost so the two origins do not differ for an unstated
+        # reason — safe to drop both if a reviewer prefers strict least-privilege here.
+        web_origins = [
+          "http://localhost:3000",
+          "https://web-dev.fitmate.me",
+        ]
         # CRITICAL: backend services require aud contains fitmate-backend (Keycloak default aud = account).
         audiences = ["fitmate-backend"]
       },
