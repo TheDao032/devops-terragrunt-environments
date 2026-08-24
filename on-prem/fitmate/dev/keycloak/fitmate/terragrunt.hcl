@@ -85,6 +85,44 @@ inputs = {
     display_name = "FITMate"
     ssl_required = "none" # HTTP lab: Keycloak reached at http://keycloak.k3s.fitmate via Traefik
 
+    # ── Login & registration policy (ADR-049 D3 + D4, owner decision 2026-08-24) ─────────────────
+    # The login page is rendered from realm state, so these decide what it OFFERS. Both were off,
+    # which is what the login theme work is blocked on.
+    #
+    # D3 — accept the email address as the identifier. With this off Keycloak renders the literal
+    # label "Username" and REJECTS every user who types their email, while the V3 auth design's own
+    # screen is captioned "Đăng nhập bằng email và mật khẩu". The design promised email and the
+    # realm refused it; they cannot both ship.
+    #
+    # ⚠️ This permits email as an ALTERNATIVE identifier — Keycloak will render "Username or email".
+    # It does NOT make the email the identity; that is `registration_email_as_username`, which also
+    # removes the username field from the sign-up form. Deliberately NOT set here: it changes the
+    # shape of a screen the fitmate agent owns, so it is theirs to decide, not ours to infer.
+    login_with_email_allowed = true
+
+    # D4 — self-service sign-up. Keycloak owns the CREDENTIAL step; the website completes the
+    # profile after first sign-in. That split is forced, not tidy: trainer sign-up needs ID-card
+    # images and certificate uploads, which Keycloak's registration page cannot collect.
+    registration_allowed = true
+
+    # 🔴 reset_password_allowed and verify_email are deliberately LEFT OFF — they are blocked on
+    # SMTP, not on a decision. Verified 2026-08-24: this realm's `smtpServer` is `{}` and the shared
+    # module configures no smtp_server block anywhere.
+    #   • reset_password_allowed → renders "Forgot password?" leading to a form that can never
+    #     deliver a reset mail. The V3 `/login/help` screen assumes this works; enabling it now
+    #     would make the screen reachable and non-functional, which is worse than absent.
+    #   • verify_email → hands every new registrant a VERIFY_EMAIL action satisfied only by an
+    #     email that never arrives, locking them out of the account they just created. With
+    #     registration now ON, enabling this without SMTP would break sign-up entirely.
+    # Both become one-line changes once a mail server exists. Until then, note the accepted
+    # consequence of registration-without-verification below.
+    #
+    # ⚠️ ACCEPTED FOR DEV, NOT FOR PROD: open registration + no email verification means anyone can
+    # create an account claiming ANY address, unverified. Contained here because this is a lab realm
+    # and Google remains trust_email = false (so a brokered login cannot silently inherit an account
+    # by matching an unverified address). Do NOT copy this pairing into stg/prod — those need SMTP
+    # and verify_email first.
+
     # Services gate on realm_access.roles.
     # NOTE: role is "administrator", NOT "admin" — Keycloak 26.4.0+ has an FGAP regression that blocks
     # updating a realm role literally named "admin" (403), even for a super-admin. The FitMate services
