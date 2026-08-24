@@ -7,6 +7,14 @@ locals {
   zone_id    = "71113800c684f8e9bd342c4545f9aecd"
 }
 
+# Local state backend (IN-12). This stack deliberately does NOT include root.hcl — it has no
+# kube/Vault dependency — so it would otherwise get NO backend at all and keep writing state into
+# .terragrunt-cache, which is the very thing IN-12 removes. Without this, deleting the cache makes
+# Terraform offer to recreate live Cloudflare tunnels, DNS records and Access apps.
+include "backend_local" {
+  path = find_in_parent_folders("backend-local.hcl")
+}
+
 terraform {
   source = "../../../../../devops-terraform-modules//cloud/cloudflare-tunnel"
 }

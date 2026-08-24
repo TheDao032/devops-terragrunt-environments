@@ -59,15 +59,23 @@ terraform {
 EOF
 }
 
-# Generate the backend. One state file per unit, keyed by its path relative to this root, so the
-# layout on disk mirrors the layout in the repo and a unit's state is findable by eye.
+# Generate the backend. One state file per unit, keyed by its repo-relative path, so the layout on
+# disk mirrors the layout in the repo and a unit's state is findable by eye.
+#
+# get_terragrunt_dir(), NOT path_relative_to_include(): the latter resolves relative to the file
+# doing the INCLUDING, so this root (repo root) and on-prem/backend-local.hcl (one level down) would
+# generate paths differing by one segment — silently, and only for the stacks using the partial.
+# Both files must produce the identical path or a stack points at state that is not there.
+#
+# ⚠️ MUTUALLY EXCLUSIVE with on-prem/backend-local.hcl and on-prem/backend.hcl (HCP). All three
+# write backend.tf with overwrite_terragrunt, so including two means the last one silently wins.
 generate "backend" {
   path      = "backend.tf"
   if_exists = "overwrite_terragrunt"
   contents  = <<EOF
 terraform {
   backend "local" {
-    path = "${local.state_root}/${path_relative_to_include()}/terraform.tfstate"
+    path = "${local.state_root}/${trimprefix(get_terragrunt_dir(), "${get_repo_root()}/")}/terraform.tfstate"
   }
 }
 EOF
