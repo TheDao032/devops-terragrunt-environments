@@ -245,6 +245,21 @@ inputs = {
         valid_redirect_uris = [
           "http://localhost:3000/api/auth/callback/keycloak",
           "https://web-dev.fitmate.me/api/auth/callback/keycloak",
+          # ── Internal lab origin (IN-28) ────────────────────────────────────────────────────
+          # Reached as web.dev.k3s.fitmate via /etc/hosts -> Traefik `web` listener, so a
+          # browser-driving agent (chrome-devtools-mcp) never traverses Cloudflare and never
+          # meets the Access interstitial that gates web-dev.fitmate.me.
+          #
+          # http:// IS DELIBERATE and must match the gitops AUTH_URL byte-for-byte. Nothing
+          # serves TLS for a .k3s.fitmate name (cert-manager can only issue for real public
+          # DNS), and Auth.js derives its cookie prefixes from AUTH_URL's SCHEME: an https
+          # AUTH_URL emits __Host-/__Secure- cookies, which a browser REFUSES to store over a
+          # plain-http origin. Measured 2026-08-26 against the running pod:
+          #   POST /api/auth/signin/keycloak over http with AUTH_URL=https
+          #   -> 302 /api/auth/signin?error=MissingCSRF   (cookie never stored, never returned)
+          # That failure shows a Keycloak-free error page while the pod sits 1/1 Running, so it
+          # reads as an app bug. Scheme parity here is what prevents it.
+          "http://web.dev.k3s.fitmate/api/auth/callback/keycloak",
         ]
         # Post-logout is a SEPARATE allowlist in Keycloak 26 — a host valid for login is NOT
         # thereby valid for logout. Omitting it leaves sign-in working and sign-out failing with
@@ -252,6 +267,10 @@ inputs = {
         valid_post_logout_redirect_uris = [
           "http://localhost:3000",
           "https://web-dev.fitmate.me",
+          # A host valid for LOGIN is not thereby valid for LOGOUT (separate allowlist in KC 26).
+          # Omitting this leaves sign-in working and sign-out failing with
+          # "Invalid parameter: post_logout_redirect_uri" — the harder half to attribute.
+          "http://web.dev.k3s.fitmate",
         ]
         # web_origins is CORS, and the BFF flow does not strictly need it: Auth.js performs the
         # code exchange server-side (Node -> Keycloak), and logout is a browser NAVIGATION, not an
@@ -260,6 +279,9 @@ inputs = {
         web_origins = [
           "http://localhost:3000",
           "https://web-dev.fitmate.me",
+          # Kept at parity with the other two lists so the three do not diverge for an unstated
+          # reason. The BFF flow does not strictly need CORS (code exchange is server-side).
+          "http://web.dev.k3s.fitmate",
         ]
         # CRITICAL: backend services require aud contains fitmate-backend (Keycloak default aud = account).
         audiences = ["fitmate-backend"]
