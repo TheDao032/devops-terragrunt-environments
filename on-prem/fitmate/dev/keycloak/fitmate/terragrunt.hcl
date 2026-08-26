@@ -153,6 +153,64 @@ inputs = {
     # by matching an unverified address). Do NOT copy this pairing into stg/prod — those need SMTP
     # and verify_email first.
 
+    # ── Branded login theme (spec 067 / SCRUM-245, T053) ────────────────────────────────────────
+    # 🔴 COMMENTED ON PURPOSE — this is STEP 3 of 3, and the order is load-bearing.
+    #
+    #   1. publish ghcr.io/fitmate-platform/fitmate-keycloak:<sha>   (FITMate repo, `make deploy`)
+    #   2. uncomment `image` in on-prem/fitmate/shared/ops-tools/terragrunt.hcl, apply, and wait
+    #      for keycloak-0 to be Ready ON THAT IMAGE
+    #   3. uncomment the line below, apply
+    #
+    # Doing 3 before 2 is NOT caught by anything. Keycloak does not validate theme names: the realm
+    # accepts `fitmate`, the apply is green, and the server silently falls back to the default theme
+    # at render time — a login page byte-identical to today. The failure looks exactly like success.
+    #
+    # `fitmate` is the theme's declared NAME (META-INF/keycloak-themes.json inside the JAR), not the
+    # JAR filename. Verified 2026-08-26 against the built artifact: one theme, `fitmate`, providing
+    # the `login` type only.
+    #
+    # ⚠️ account_theme / email_theme stay CLASSIC and are deliberately not exposed by the shared
+    # module — the JAR carries login templates only, so pointing them here would break those pages.
+    #
+    # ACCEPTANCE TEST (the only one that counts — a green apply does not):
+    #   curl -s https://auth-dev.fitmate.me/realms/fitmate-dev/protocol/openid-connect/auth \
+    #     -d 'client_id=fitmate-website' --get -d 'response_type=code' \
+    #     -d 'redirect_uri=https://web-dev.fitmate.me' | grep -o '/resources/[^"]*/login/[a-z0-9.-]*'
+    #   BEFORE: /resources/<hash>/login/keycloak.v2      AFTER: /resources/<hash>/login/fitmate
+    # login_theme = "fitmate"
+
+    # ── Internationalization (SCRUM-245 blocker, spec 067) ──────────────────────────────────────
+    # Vietnamese-first, English secondary — the same ordering as Principle III (vi-VN complete, en
+    # secondary). PARAMETERISED PER ENV: this is the shared module's `realm.internationalization`
+    # object, defaulting to null, so stg and prod stay i18n-disabled until each adds its own block.
+    # Do not move this to env.hcl — the realm's shape is a per-realm decision, not a per-env constant.
+    #
+    # WHY THIS IS INFRA WORK AND NOT THEME WORK: measured on the live login page 2026-08-25,
+    # `document.documentElement.lang` was "en" and there was NO `#kc-locale` element in the DOM at
+    # all. Keycloak renders that dropdown only when the realm has i18n enabled with >1 supported
+    # locale — with i18n off, the control is never emitted and no theme can add it back. The branded
+    # theme (SCRUM-245) styles a switcher that, until this applies, does not exist to style.
+    #
+    # TWO locales, not one, is deliberate: a single-entry list enables i18n and translates the pages
+    # but renders no switcher, which is indistinguishable from a theme that forgot it.
+    #
+    # ✅ VERIFIED the translations actually exist in the running image before enabling this — the
+    # failure mode is that a locale applies cleanly and every string still renders in English,
+    # because Keycloak's `vi` bundle ships in the `resources-community` overlay that Red Hat builds
+    # and `-DskipCommunityTranslations` builds omit. This cluster runs the UPSTREAM image
+    # quay.io/keycloak/keycloak:26.7.0
+    # (sha256:0f198be292568439d700cdbfb893e69a6009bb43a94a06a945b1d3d506c76b13), whose
+    # org.keycloak.keycloak-themes-26.7.0.jar contains
+    # theme/base/login/messages/messages_vi.properties at 35,360 bytes / 498 keys vs 500 for
+    # messages_en.properties — including doLogIn=Đăng nhập and usernameOrEmail=Tên người dùng hoặc
+    # email. The only two untranslated keys are delegationScopeConsentText and didExistsMessage,
+    # neither of which appears on the login form. So no message-bundle vendoring is needed here.
+    # 🔴 Re-check this if the image is ever switched to registry.redhat.io/rhbk/* or to a custom build.
+    internationalization = {
+      supported_locales = ["vi", "en"]
+      default_locale    = "vi"
+    }
+
     # Services gate on realm_access.roles.
     # NOTE: role is "administrator", NOT "admin" — Keycloak 26.4.0+ has an FGAP regression that blocks
     # updating a realm role literally named "admin" (403), even for a super-admin. The FitMate services
@@ -229,7 +287,17 @@ inputs = {
     # the direct grant fails with "Account is not fully set up" (with an empty requiredActions list).
     users = [
       {
-        username       = "trainee1"
+        # `key` pins the TERRAFORM RESOURCE ADDRESS to what state already holds
+        # (`keycloak_user.main["trainee1"]`, confirmed via `terragrunt state list`), so correcting
+        # `username` below does NOT move the map key and does NOT recreate the user. Without it this
+        # edit reads as a rename and plans 1 destroy + 1 create — issuing a new `sub` for the e2e
+        # fixture over a field Keycloak had already converged on. Do not "tidy" this to match the
+        # username; it is a state address, not an identifier.
+        key = "trainee1"
+        # ADR-050: the email IS the identifier — there is no username at any layer. Keycloak already
+        # rewrote this user's username to its email when registration_email_as_username applied, so
+        # the bare "trainee1" here was the stale side of that drift, not Keycloak misbehaving.
+        username       = "trainee1@fitmate.local"
         email          = "trainee1@fitmate.local"
         first_name     = "Trainee"
         last_name      = "One"
@@ -313,8 +381,14 @@ inputs = {
   }
 
   # trainee1 password from Vault (generated by vault-secrets).
+  # 🔴 KEYED BY USERNAME, not by a friendly name: users.tf does
+  # `lookup(var.user_passwords, each.value.username, "")`. When the username became the email above,
+  # this key had to move with it — a stale `trainee1` key makes the lookup miss, the initial_password
+  # block disappear, and the user get created with NO PASSWORD. That failure surfaces as
+  # `invalid_grant / Invalid user credentials` in the e2e harness against a correctly-created user.
+  # The Vault PATH keeps its own name (keycloak/fitmate/trainee1/creds) — that is storage, not identity.
   user_passwords = {
-    trainee1 = dependency.vault-secrets.outputs.secrets["keycloak/fitmate/trainee1/creds"]["password"]
+    "trainee1@fitmate.local" = dependency.vault-secrets.outputs.secrets["keycloak/fitmate/trainee1/creds"]["password"]
   }
 
   # Hand the GENERATED fitmate-website secret straight to Vault → ESO → website (no manual copy).

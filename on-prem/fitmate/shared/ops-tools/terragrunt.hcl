@@ -155,6 +155,52 @@ inputs = {
 
       namespace = "keycloak"
       instances = 1
+
+      # ── Branded login theme (spec 067 / SCRUM-245, T052 + T053a) ─────────────────────────────
+      # 🔴 COMMENTED ON PURPOSE — DO NOT UNCOMMENT UNTIL THE IMAGE IS ACTUALLY PUBLISHED AND
+      # PULLABLE. This is one Keycloak serving fitmate-dev, fitmate-stg AND prod; pointing it at a
+      # tag that does not exist is not a no-op, it is ImagePullBackOff on the only auth server all
+      # three realms use. Verify the tag resolves first:
+      #     docker manifest inspect ghcr.io/fitmate-platform/fitmate-keycloak:<tag> > /dev/null && echo OK
+      #
+      # The image is built by the FITMate repo (services/front-end/fitmate-website/keycloak-theme,
+      # `make image` / `make deploy`), because that is where the theme source and its Tailwind/token
+      # inputs live. Infra consumes a tag; it does not build one. Pin an IMMUTABLE tag (the commit
+      # sha the Makefile defaults to), never `latest` — the tag IS the deploy unit here.
+      #
+      # ⚠️ VERSION ALIGNMENT: the custom image's Keycloak base MUST match the operator (26.7.0
+      # today). The operator and server are upgraded together; a pinned custom image is not, so
+      # this becomes a standing rebuild obligation on every Keycloak bump.
+      # image = "ghcr.io/fitmate-platform/fitmate-keycloak:<commit-sha>"
+      #
+      # Only if the GHCR package is PRIVATE. The Secret must already exist in the `keycloak`
+      # namespace — nothing here creates it (the existing `ghcr-pull` Secrets live in the
+      # fitmate-*-dev namespaces, NOT in `keycloak`). Publishing the package publicly is simpler
+      # and leaks nothing: the image is a stock Keycloak plus a CSS/JS theme.
+      # image_pull_secret = "ghcr-pull"
+      #
+      # Theme caching. RUNTIME options (verified: only SPI names ending in --provider, --enabled or
+      # --provider-default are build-time), so they belong here on the CR rather than in the image.
+      #
+      # ⚠️ SERVER-WIDE, NOT PER-REALM. These slow theme rendering for EVERY realm on this instance,
+      # prod included — there is no per-realm theme cache. Keycloak's own docs warn this "will
+      # significantly impact performance".
+      #
+      # ⚠️ AND THEY ARE PROBABLY NOT WHAT MAKES A REDEPLOY VISIBLE. cache-themes/cache-templates are
+      # in-JVM caches, so a new image tag already empties them by rolling the pod. The one that
+      # genuinely matters is static-max-age: it sets the BROWSER Cache-Control on theme assets and
+      # defaults to 2592000 (30 days), while the /resources/<hash>/ path segment is the Keycloak
+      # RESOURCES version — it does NOT change when only the theme changes. So without this, an
+      # already-visited browser can hold stale CSS for a month across theme updates.
+      # A value <= 0 makes Keycloak send `no-cache` instead of a max-age.
+      #
+      # RECOMMENDATION: enable while the theme is being iterated, then delete this block once it
+      # stabilises and let the image tag be the cache-bust.
+      # additional_options = {
+      #   "spi-theme--cache-themes"    = "false"
+      #   "spi-theme--cache-templates" = "false"
+      #   "spi-theme--static-max-age"  = "-1"
+      # }
     }
     db = {
       host     = local.pg_host
@@ -475,10 +521,20 @@ inputs = {
     # chart's own defaults are sized for production clusters; an unbounded Prometheus on a 2.9Gi
     # node evicts its neighbours. Sized for the few thousand active series this lab actually has;
     # whole stack lands ~1-1.8Gi. Raise ONLY from measured numbers.
+    # ⚠️ retention_size and storage_size MOVE TOGETHER. local-path does not enforce PVC size (it
+    # bind-mounts a node dir), so storage_size is documentation and retention_size is the real
+    # bound. Raising storage_size alone changes nothing; raising retention_size alone lets
+    # Prometheus eat the node root fs until DiskPressure evicts its neighbours.
+    # Official rule: retention_size <= 80-85% of storage_size (the rest is compaction scratch).
+    # 30d x ~0.45 GB/day = ~13.5GB of blocks; 16GB cap on a 20Gi PVC = 80%. See IN-25.
+    # local-path has ALLOWVOLUMEEXPANSION: false -> this cannot be grown in place. Sized once,
+    # after the guest disks went 40G -> 100G on 2026-08-25.
     prometheus = {
       ingress_prefix = "/"
-      retention      = "7d"  # debugging aid, not a compliance store
-      retention_size = "4GB" # hard stop that protects the node as series grow
+      retention      = "30d"  # was 7d; the 40G guest disk was the cap, not the workload
+      retention_size = "16GB" # hard stop that protects the node as series grow
+      storage_size   = "20Gi"
+      storage_class  = "local-path"
       cpu_request    = "100m"
       memory_request = "512Mi"
       cpu_limit      = "1000m"
@@ -497,9 +553,17 @@ inputs = {
     # scheduler, so a high limit with a low request is free burst headroom. Tight limits are a memory
     # discipline, not a CPU one. The values template also adds a startupProbe so liveness stops
     # policing boot. Steady-state observed: ~218Mi, so 384Mi limit leaves real headroom over 256Mi.
+    # storage_size is deliberately SMALL. Dashboards arrive as sidecar ConfigMaps and datasources
+    # are provisioned, so none of that needs a disk. What this preserves is the state Grafana alone
+    # owns and code cannot rebuild: annotations (incident markers), users/preferences, starred
+    # dashboards, Explore history. Omitting the key entirely reverts to stateless.
+    # A ReadWriteOnce PVC pins Grafana to one node and caps it at one replica — fine for a single
+    # -replica dev lab. In prod use an external Postgres instead; that is what allows HA.
     grafana = {
       password       = dependency.vault-secrets.outputs.secrets["grafana/creds"]["password"]
       ingress_prefix = "/"
+      storage_size   = "2Gi"
+      storage_class  = "local-path"
       cpu_request    = "100m"
       memory_request = "192Mi"
       cpu_limit      = "1000m"
