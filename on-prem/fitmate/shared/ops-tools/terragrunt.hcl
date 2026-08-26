@@ -155,6 +155,52 @@ inputs = {
 
       namespace = "keycloak"
       instances = 1
+
+      # ── Branded login theme (spec 067 / SCRUM-245, T052 + T053a) ─────────────────────────────
+      # 🔴 COMMENTED ON PURPOSE — DO NOT UNCOMMENT UNTIL THE IMAGE IS ACTUALLY PUBLISHED AND
+      # PULLABLE. This is one Keycloak serving fitmate-dev, fitmate-stg AND prod; pointing it at a
+      # tag that does not exist is not a no-op, it is ImagePullBackOff on the only auth server all
+      # three realms use. Verify the tag resolves first:
+      #     docker manifest inspect ghcr.io/fitmate-platform/fitmate-keycloak:<tag> > /dev/null && echo OK
+      #
+      # The image is built by the FITMate repo (services/front-end/fitmate-website/keycloak-theme,
+      # `make image` / `make deploy`), because that is where the theme source and its Tailwind/token
+      # inputs live. Infra consumes a tag; it does not build one. Pin an IMMUTABLE tag (the commit
+      # sha the Makefile defaults to), never `latest` — the tag IS the deploy unit here.
+      #
+      # ⚠️ VERSION ALIGNMENT: the custom image's Keycloak base MUST match the operator (26.7.0
+      # today). The operator and server are upgraded together; a pinned custom image is not, so
+      # this becomes a standing rebuild obligation on every Keycloak bump.
+      # image = "ghcr.io/fitmate-platform/fitmate-keycloak:<commit-sha>"
+      #
+      # Only if the GHCR package is PRIVATE. The Secret must already exist in the `keycloak`
+      # namespace — nothing here creates it (the existing `ghcr-pull` Secrets live in the
+      # fitmate-*-dev namespaces, NOT in `keycloak`). Publishing the package publicly is simpler
+      # and leaks nothing: the image is a stock Keycloak plus a CSS/JS theme.
+      # image_pull_secret = "ghcr-pull"
+      #
+      # Theme caching. RUNTIME options (verified: only SPI names ending in --provider, --enabled or
+      # --provider-default are build-time), so they belong here on the CR rather than in the image.
+      #
+      # ⚠️ SERVER-WIDE, NOT PER-REALM. These slow theme rendering for EVERY realm on this instance,
+      # prod included — there is no per-realm theme cache. Keycloak's own docs warn this "will
+      # significantly impact performance".
+      #
+      # ⚠️ AND THEY ARE PROBABLY NOT WHAT MAKES A REDEPLOY VISIBLE. cache-themes/cache-templates are
+      # in-JVM caches, so a new image tag already empties them by rolling the pod. The one that
+      # genuinely matters is static-max-age: it sets the BROWSER Cache-Control on theme assets and
+      # defaults to 2592000 (30 days), while the /resources/<hash>/ path segment is the Keycloak
+      # RESOURCES version — it does NOT change when only the theme changes. So without this, an
+      # already-visited browser can hold stale CSS for a month across theme updates.
+      # A value <= 0 makes Keycloak send `no-cache` instead of a max-age.
+      #
+      # RECOMMENDATION: enable while the theme is being iterated, then delete this block once it
+      # stabilises and let the image tag be the cache-bust.
+      # additional_options = {
+      #   "spi-theme--cache-themes"    = "false"
+      #   "spi-theme--cache-templates" = "false"
+      #   "spi-theme--static-max-age"  = "-1"
+      # }
     }
     db = {
       host     = local.pg_host
