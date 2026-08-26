@@ -598,6 +598,64 @@ inputs = {
           path_prefix       = "/"
           backend_name      = "kube-prometheus-stack-grafana"
           backend_port      = 80
+        },
+
+        # ── Prometheus + Alertmanager UIs ────────────────────────────────────────────────────────
+        #
+        # Added because their absence was the ONLY reason `kubectl port-forward` kept appearing in
+        # runbooks and ticket text. `/etc/hosts` already resolved both names to the Traefik LB long
+        # before this existed — the missing half was always the route, so the symptom was a Traefik
+        # 404 (request arrived, no HTTPRoute matched the Host) rather than a DNS failure. Those two
+        # look nothing alike once you know, and identical before you do:
+        #
+        #   Host: grafana.k3s.fitmate       -> 302   (route exists)
+        #   Host: prometheus.k3s.fitmate    -> 404   (name resolved, nothing routed it)
+        #
+        # Backends are plain-HTTP ClusterIP, so no BackendTLSPolicy — which also avoids the Traefik
+        # Gateway-API hostname-verification bug that blocks verified HTTPS re-encryption.
+        #
+        # Service names + ports CONFIRMED against the live cluster (not inferred from the chart):
+        #   kube-prometheus-stack-prometheus     http-web:9090
+        #   kube-prometheus-stack-alertmanager   http-web:9093
+        # Both are derived from the RELEASE name, so they move if the release is ever renamed.
+        #
+        # ⚠️ SECURITY — READ BEFORE EXTENDING THIS.
+        # Neither UI has ANY authentication of its own. Grafana at least has a login; these do not.
+        # Anything that can reach the Traefik LB IP with the right Host header gets:
+        #   Prometheus    — every metric, every label value, and the full scrape/target config
+        #   Alertmanager  — alert contents AND the ability to CREATE SILENCES, i.e. an unauthenticated
+        #                   party can suppress alerting for the whole cluster
+        # That is acceptable ONLY because these are lab-internal `.k3s.<suffix>` names on the `web`
+        # listener, reachable from the LAN and not published through Cloudflare.
+        #
+        # 🔴 DO NOT attach these to a PUBLIC hostname or to `websecure` for external use, and do not
+        # add them to the Cloudflare tunnel, without putting Cloudflare Access (or equivalent) in
+        # front — the way ../../<env>/cloudflare-access gates auth-<env>.fitmate.me. Publishing an
+        # unauthenticated Alertmanager is strictly worse than having no alerting, because silences
+        # fail closed and silently.
+        {
+          name              = "prometheus"
+          namespace         = "monitoring"
+          gateway_name      = "traefik-gateway"
+          gateway_namespace = "traefik"
+          section_name      = "web"
+          hostnames         = ["prometheus.k3s.${local.cluster_suffix}"]
+          path_prefix       = "/"
+          backend_name      = "kube-prometheus-stack-prometheus"
+          backend_port      = 9090
+        },
+        {
+          # Needed for IN-27: the plan is to watch rules go Pending -> Firing in this UI BEFORE any
+          # delivery channel is chosen. Without a reachable Alertmanager that workflow cannot happen.
+          name              = "alertmanager"
+          namespace         = "monitoring"
+          gateway_name      = "traefik-gateway"
+          gateway_namespace = "traefik"
+          section_name      = "web"
+          hostnames         = ["alertmanager.k3s.${local.cluster_suffix}"]
+          path_prefix       = "/"
+          backend_name      = "kube-prometheus-stack-alertmanager"
+          backend_port      = 9093
         }
       ]
     }
