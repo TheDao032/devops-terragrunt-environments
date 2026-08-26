@@ -153,6 +153,32 @@ inputs = {
     # by matching an unverified address). Do NOT copy this pairing into stg/prod — those need SMTP
     # and verify_email first.
 
+    # ── Branded login theme (spec 067 / SCRUM-245, T053) ────────────────────────────────────────
+    # 🔴 COMMENTED ON PURPOSE — this is STEP 3 of 3, and the order is load-bearing.
+    #
+    #   1. publish ghcr.io/fitmate-platform/fitmate-keycloak:<sha>   (FITMate repo, `make deploy`)
+    #   2. uncomment `image` in on-prem/fitmate/shared/ops-tools/terragrunt.hcl, apply, and wait
+    #      for keycloak-0 to be Ready ON THAT IMAGE
+    #   3. uncomment the line below, apply
+    #
+    # Doing 3 before 2 is NOT caught by anything. Keycloak does not validate theme names: the realm
+    # accepts `fitmate`, the apply is green, and the server silently falls back to the default theme
+    # at render time — a login page byte-identical to today. The failure looks exactly like success.
+    #
+    # `fitmate` is the theme's declared NAME (META-INF/keycloak-themes.json inside the JAR), not the
+    # JAR filename. Verified 2026-08-26 against the built artifact: one theme, `fitmate`, providing
+    # the `login` type only.
+    #
+    # ⚠️ account_theme / email_theme stay CLASSIC and are deliberately not exposed by the shared
+    # module — the JAR carries login templates only, so pointing them here would break those pages.
+    #
+    # ACCEPTANCE TEST (the only one that counts — a green apply does not):
+    #   curl -s https://auth-dev.fitmate.me/realms/fitmate-dev/protocol/openid-connect/auth \
+    #     -d 'client_id=fitmate-website' --get -d 'response_type=code' \
+    #     -d 'redirect_uri=https://web-dev.fitmate.me' | grep -o '/resources/[^"]*/login/[a-z0-9.-]*'
+    #   BEFORE: /resources/<hash>/login/keycloak.v2      AFTER: /resources/<hash>/login/fitmate
+    # login_theme = "fitmate"
+
     # ── Internationalization (SCRUM-245 blocker, spec 067) ──────────────────────────────────────
     # Vietnamese-first, English secondary — the same ordering as Principle III (vi-VN complete, en
     # secondary). PARAMETERISED PER ENV: this is the shared module's `realm.internationalization`
