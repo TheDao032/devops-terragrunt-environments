@@ -171,7 +171,7 @@ inputs = {
       # ⚠️ VERSION ALIGNMENT: the custom image's Keycloak base MUST match the operator (26.7.0
       # today). The operator and server are upgraded together; a pinned custom image is not, so
       # this becomes a standing rebuild obligation on every Keycloak bump.
-      image = "ghcr.io/fitmate-platform/fitmate-keycloak:d2d2682"
+      image = "ghcr.io/fitmate-platform/fitmate-keycloak:1b82195"
       #
       # Only if the GHCR package is PRIVATE. The Secret must already exist in the `keycloak`
       # namespace — nothing here creates it (the existing `ghcr-pull` Secrets live in the
