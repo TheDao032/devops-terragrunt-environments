@@ -154,7 +154,8 @@ inputs = {
     # and verify_email first.
 
     # ── Branded login theme (spec 067 / SCRUM-245, T053) ────────────────────────────────────────
-    # 🔴 COMMENTED ON PURPOSE — this is STEP 3 of 3, and the order is load-bearing.
+    # ✅ ENABLED — this is STEP 3 of 3. The ordering below is kept because it is still the
+    # procedure for stg and prod, and because it explains why this line may not be moved earlier.
     #
     #   1. publish ghcr.io/fitmate-platform/fitmate-keycloak:<sha>   (FITMate repo, `make deploy`)
     #   2. uncomment `image` in on-prem/fitmate/shared/ops-tools/terragrunt.hcl, apply, and wait
@@ -177,7 +178,7 @@ inputs = {
     #     -d 'client_id=fitmate-website' --get -d 'response_type=code' \
     #     -d 'redirect_uri=https://web-dev.fitmate.me' | grep -o '/resources/[^"]*/login/[a-z0-9.-]*'
     #   BEFORE: /resources/<hash>/login/keycloak.v2      AFTER: /resources/<hash>/login/fitmate
-    # login_theme = "fitmate"
+    login_theme = "fitmate"
 
     # ── Internationalization (SCRUM-245 blocker, spec 067) ──────────────────────────────────────
     # Vietnamese-first, English secondary — the same ordering as Principle III (vi-VN complete, en
