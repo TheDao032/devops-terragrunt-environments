@@ -516,11 +516,23 @@ inputs = {
       release_name = "kube-prometheus-stack"
     }
 
-    # ⚠️ LIMITS ARE LOAD-BEARING, NOT HYGIENE. Schedulable capacity is 3 agents x 2 vCPU / 2962Mi
-    # (both servers control-plane tainted), ~51% used, with 5 more services still to onboard. The
-    # chart's own defaults are sized for production clusters; an unbounded Prometheus on a 2.9Gi
-    # node evicts its neighbours. Sized for the few thousand active series this lab actually has;
-    # whole stack lands ~1-1.8Gi. Raise ONLY from measured numbers.
+    # ⚠️ LIMITS ARE LOAD-BEARING, NOT HYGIENE. The chart's own defaults are sized for production
+    # clusters; an unbounded Prometheus on a small node evicts its neighbours. Raise ONLY from
+    # measured numbers.
+    #
+    # CAPACITY, RE-MEASURED 2026-08-26 (the previous note here said "3 agents x 2 vCPU / 2962Mi",
+    # which was STALE and is what justified limits that later throttled Grafana into unusability):
+    #   k3s-agent-{1,2,3}   3 vCPU / 3529Mi each, untainted
+    #   k3s-server-1        2 vCPU / 1961Mi, control-plane TAINTED (not schedulable)
+    #   --> schedulable: 9 vCPU / 10587Mi
+    #
+    # Measured actual usage at the same time, whole monitoring namespace: 87m CPU / 1296Mi.
+    # Every node sat at 4% CPU. Prometheus itself: 25m CPU / 588Mi at ~123k active series.
+    # CPU is nowhere near a constraint on this cluster; memory is the axis that matters.
+    #
+    # ⚠️ REQUESTS reserve capacity; LIMITS DO NOT. A high limit with a modest request is free
+    # headroom, and a tight limit does not protect the node — it throttles the workload instead.
+    # That distinction is the whole reason the Grafana numbers below were wrong twice.
     # ⚠️ retention_size and storage_size MOVE TOGETHER. local-path does not enforce PVC size (it
     # bind-mounts a node dir), so storage_size is documentation and retention_size is the real
     # bound. Raising storage_size alone changes nothing; raising retention_size alone lets
@@ -538,7 +550,12 @@ inputs = {
       cpu_request    = "100m"
       memory_request = "512Mi"
       cpu_limit      = "1000m"
-      memory_limit   = "1Gi"
+      # 1Gi -> 2Gi (2026-08-26). Measured 588Mi at ~123k active series = 57% of the old limit, and
+      # IN-26 is actively ADDING scrape targets (trainee done, booking+inquiry in flight, admin +
+      # trainer + stg queued). Prometheus OOMKilled mid-compaction replays the WAL on restart, so
+      # the failure is slow AND lossy — not worth running near the ceiling to save memory that
+      # limits never reserve anyway. retention_size 16GB is what actually protects the node disk.
+      memory_limit   = "2Gi"
     }
 
     # Admin password from Vault platform/grafana/creds. The chart default is the well-known literal
@@ -552,7 +569,20 @@ inputs = {
     # ~10 *.grafana.app API groups at startup, then idles near 0. Only REQUESTS are reserved by the
     # scheduler, so a high limit with a low request is free burst headroom. Tight limits are a memory
     # discipline, not a CPU one. The values template also adds a startupProbe so liveness stops
-    # policing boot. Steady-state observed: ~218Mi, so 384Mi limit leaves real headroom over 256Mi.
+    # policing boot.
+    #
+    # 🔴 THE "~218Mi steady-state, 384Mi leaves real headroom" NOTE THAT USED TO SIT HERE WAS WRONG,
+    # and it cost a day. Re-measured 2026-08-26 while Grafana was unusable in the browser:
+    #   memory      358-380Mi against the 384Mi limit  (i.e. PINNED TO THE CEILING)
+    #   CPU         container_cpu_cfs_throttled_periods / cfs_periods == 1.0  (throttled EVERY period)
+    #   up{job="grafana"}  == 0
+    # Ruled out as causes: Prometheus datasource (queries returned in 0.03s), Grafana DB size
+    # (2.4MB), disk (13% used), log spin (10 lines in 3 min), node pressure (every node at 4% CPU).
+    # Diagnosis: Go GC death spiral. Heap near the limit -> continuous GC -> CPU pegged -> the
+    # container gets throttled -> requests time out. NOTHING OOMKills, so the pod stays "Running"
+    # and 1/1 Ready while being useless. Do not read a clean pod status as evidence here.
+    # The old 218Mi figure was a measurement of a FRESH pod, taken before Grafana 13.2's unified
+    # storage (embedded apiserver + Bleve search index at /var/lib/grafana-search) warmed up.
     # storage_size is deliberately SMALL. Dashboards arrive as sidecar ConfigMaps and datasources
     # are provisioned, so none of that needs a disk. What this preserves is the state Grafana alone
     # owns and code cannot rebuild: annotations (incident markers), users/preferences, starred
@@ -565,9 +595,16 @@ inputs = {
       storage_size   = "2Gi"
       storage_class  = "local-path"
       cpu_request    = "100m"
-      memory_request = "192Mi"
-      cpu_limit      = "1000m"
-      memory_limit   = "384Mi"
+      # 192Mi -> 256Mi: matches measured idle. Requests DO reserve, so this one is a real cost.
+      memory_request = "256Mi"
+      # 1000m -> 2000m: free headroom (limits reserve nothing) and the throttle fraction was 1.0.
+      cpu_limit      = "2000m"
+      # 384Mi -> 1Gi. NOTE the true peak is UNKNOWN: 380Mi was measured against a 384Mi cap, so it
+      # is a floor, not a peak. 1Gi is chosen to be comfortably past the ceiling rather than tuned.
+      # ⚠️ AFTER APPLYING, RE-MEASURE. Success = throttle fraction well BELOW 1.0 and memory that
+      # settles somewhere under the new cap. If it simply re-pegs at 2000m/1Gi, that is a DIFFERENT
+      # bug — go read Grafana 13.2 unified-storage issues, do not raise these numbers a third time.
+      memory_limit   = "1Gi"
     }
 
     # Rules evaluate from day one; DELIVERY (Telegram/Slack) is wired LAST, deliberately. An
