@@ -221,6 +221,58 @@ inputs = {
         zones = ["fitmate.me"]
       }
 
+      # ── Internal mTLS CA (ADR-059 step 1) ───────────────────────────────────────────────────
+      # A private trust hierarchy the fitmate-<service>-<env> namespaces can issue service
+      # identity from. The ACME issuers above cannot do this: Let's Encrypt will not sign
+      # *.svc.cluster.local, and a publicly-trusted root is the wrong anchor for pod-to-pod
+      # traffic — every certificate on the internet would chain to it.
+      #
+      # Renders, per environment: a selfSigned ClusterIssuer -> a self-signed root CA
+      # Certificate (in the cert-manager namespace, which is where a `ca` ClusterIssuer
+      # resolves its secret from) -> a `ca` ClusterIssuer that the fitmate-<service>-<env>
+      # Certificates reference.
+      #
+      # ⚠️ This does NOT touch the `vault` namespace. vault-selfsigned / vault-tls-ca /
+      # vault-ca-issuer / vault-tls-server are left exactly as they are — Vault is live and
+      # everything else in the cluster authenticates to it, so its serving path is not something
+      # to modify in passing. The internal mTLS roots are deliberately independent of Vault CA.
+      internal_ca = {
+        enabled = true
+
+        # Issuer/secret names are "<name_prefix>-<env>"; leaves reference the ClusterIssuer by
+        # that name. Changing this renames every ClusterIssuer and orphans the Certificates
+        # already pointing at the old names — treat it as a migration, not a rename.
+        name_prefix = "fitmate-mtls"
+
+        # ONE SELF-SIGNED ROOT PER ENVIRONMENT, and this is the point of the whole block.
+        #
+        # Namespaces are per-service-per-environment, so a single shared CA would make a
+        # dev-issued certificate chain correctly from prod's point of view — leaving the
+        # environment boundary to application code comparing namespace strings.
+        #
+        # 🔴 Separate INTERMEDIATES under a shared root do NOT fix that, which is not obvious.
+        # cert-manager sets a leaf Secret's `ca.crt` to the highest SELF-SIGNED certificate in the
+        # chain, not the immediate issuer — so under a shared root every environment's leaves
+        # would carry that shared root and trust all three environments. Verified against the live
+        # Vault chain, which has exactly that shape: vault-tls-server's ca.crt is CN=vault-ca,
+        # self-signed. Separate ROOTS are what actually makes a dev certificate unable to chain to
+        # prod's anchor.
+        #
+        # `prod` is listed even though no fitmate-*-prod namespace exists yet. A trust root is the
+        # one thing that should pre-exist its consumers — standing it up mid-rollout means
+        # bootstrapping trust under time pressure. It costs one idle Secret.
+        environments = ["dev", "stg", "prod"]
+
+        # 10y / renew at 30d, matching the existing vault-tls-ca root in this cluster. Rotating a
+        # root means redistributing trust to every workload in that environment at once, so it is
+        # deliberately long-lived. renewBefore is also what makes the 7-day warning in spec 069
+        # SC-005 achievable at all: it opens a 30-day window in which a failed renewal is visible
+        # before anything expires — but only once cert-manager is actually scraped (see the
+        # separate cert-manager alerting change; today it is not).
+        ca_duration     = "87600h"
+        ca_renew_before = "720h"
+      }
+
       # ── Certificate expiry / renewal-failure alerting ───────────────────────────────────────
       # Renders a PrometheusRule into the cert-manager namespace. Paired with
       # prometheus.servicemonitor.enabled=true in the chart's values.controller.yml.tftpl —
