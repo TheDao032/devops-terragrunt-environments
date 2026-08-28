@@ -220,6 +220,28 @@ inputs = {
         # quietly consume this issuer.
         zones = ["fitmate.me"]
       }
+
+      # ── Certificate expiry / renewal-failure alerting ───────────────────────────────────────
+      # Renders a PrometheusRule into the cert-manager namespace. Paired with
+      # prometheus.servicemonitor.enabled=true in the chart's values.controller.yml.tftpl —
+      # neither half is useful alone.
+      #
+      # Opt-in rather than always-on because the PrometheusRule CRD is a kube-prometheus-stack
+      # resource. A tenant running cert-manager WITHOUT the monitoring stack would fail the apply
+      # on a missing CRD, so the flag is what says "this cluster has Prometheus".
+      #
+      # WHY IT IS NEEDED: measured 2026-08-28, Prometheus held zero certmanager_* series and
+      # cert-manager was in none of the 28 active scrape targets, because the chart defaults
+      # servicemonitor.enabled to false. A failed renewal produced NO signal — the first symptom
+      # would have been simultaneous TLS failures on the expiry date.
+      #
+      # ⚠️ This still does not make anyone RECEIVE an alert. Alertmanager here has one receiver
+      # named `null` with no integrations, and the root route sends everything to it. Alerts will
+      # be visible in the Prometheus/Alertmanager UIs and will page nobody until a real receiver
+      # is configured. Spec 069 SC-005 is not satisfied until that is done.
+      alerts = {
+        enabled = true
+      }
     }
   }
 
