@@ -98,6 +98,36 @@ inputs = {
     public_host_certs = [
       { name = "auth-dev.fitmate.me", issuer = "letsencrypt-dns01-prod" },
       { name = "auth-stg.fitmate.me", issuer = "letsencrypt-dns01-prod" },
+
+      # ── admin panel BFF host (ADR-066 / SCRUM-323 / spec 071) ───────────────────────────────
+      # DIFFERENT REASON FROM THE TWO ABOVE. Those exist so an in-cluster pod can reach a public
+      # auth host over trusted TLS. This one is for the BROWSER, and it exists because of a
+      # property of cookies rather than of routing:
+      #
+      #   admin-service's BFF hands the browser an `HttpOnly; Secure; SameSite=Lax` session
+      #   cookie, and the access token never enters the browser (ADR-066, RFC 10017 §6.1).
+      #   Browsers REJECT a `Secure` cookie set from a non-secure origin. Served over plain http
+      #   the cookie is silently dropped: login appears to succeed and then bounces to the login
+      #   page, with the pod 1/1 Running and clean logs. It reads as a BFF bug and is not one.
+      #
+      # The alternative considered and rejected was `admin.k3s.fitmate` over the plain `web`
+      # listener plus a per-environment `secure` flag. Nothing can serve a trusted certificate for
+      # a .k3s.fitmate name — Let's Encrypt will not issue for a non-public TLD — so that path
+      # requires turning `Secure` OFF in dev. That weakens, in dev only, the exact mechanism
+      # ADR-066 exists to provide, which means the "credential unreachable from page scripts"
+      # property would first be exercised in PRODUCTION. A real certificate removes the flag
+      # instead of defaulting it well.
+      #
+      # ⚠️ THIS HOST IS NOT PUBLIC, and nothing here makes it public. Issuance is DNS-01, which
+      # validates by writing a TXT record at _acme-challenge.<name> — it never connects to the
+      # host, so a name with NO public A record is issuable. Verified 2026-08-31: the ACME solver
+      # is scoped `dnsZones = ["fitmate.me"]` (so this name is in scope), `dig admin-dev.fitmate.me`
+      # returns NXDOMAIN, and fitmate.me publishes no CAA record that could refuse Let's Encrypt.
+      # Reachability comes solely from the coredns rewrite below (in-cluster) and /etc/hosts (the
+      # operator's Mac). Adding a route in ../../dev/cloudflare-tunnel is what would make it
+      # public — deliberately NOT done: ADR-066 keeps the panel off anything internet-reachable
+      # until 2FA lands.
+      { name = "admin-dev.fitmate.me", issuer = "letsencrypt-dns01-prod" },
     ]
 
     # Traefik dashboard is now exposed by the CHART's built-in IngressRoute
@@ -161,6 +191,39 @@ inputs = {
     rewrites = [
       { from = "auth-dev.fitmate.me", to = "traefik.traefik.svc.cluster.local" },
       { from = "auth-stg.fitmate.me", to = "traefik.traefik.svc.cluster.local" },
+
+      # ── admin panel BFF host (ADR-066) ──────────────────────────────────────────────────────
+      # ⚠️ NOT for the same reason as the two above, and the difference matters if anyone ever
+      # prunes this list. Those two exist to BYPASS Cloudflare Access for in-cluster callers.
+      # admin-dev.fitmate.me has no Cloudflare presence at all — no A record, no tunnel route, no
+      # Access app — so there is nothing to bypass. Without this rewrite the name simply does not
+      # resolve in-cluster (public DNS returns NXDOMAIN), and any server-side call to it fails at
+      # DNS rather than at TLS or at Access.
+      #
+      # Needed because ADR-066's BFF performs the AUTHORIZATION-CODE EXCHANGE server-side, and
+      # Keycloak runs hostname.strict=false — it derives `iss` from the host it is reached
+      # through. Proven on the live server 2026-08-31, same request both ways:
+      #     Host: keycloak-service.keycloak.svc.cluster.local:8080
+      #       -> iss http://keycloak-service.keycloak.svc.cluster.local:8080/realms/fitmate-dev
+      #     X-Forwarded-Host: auth-dev.fitmate.me
+      #       -> iss https://auth-dev.fitmate.me/realms/fitmate-dev
+      # So the BFF must build BOTH its authorize and token URLs from KEYCLOAK_ISSUER (the public
+      # host), not from KEYCLOAK_ADMINBASEURL (cluster-local) — the tempting reuse, since that
+      # variable is already in the pod's env. Doing so mints a token whose `iss` fails validation
+      # on EVERY login while every component looks healthy.
+      #
+      # That path was verified end-to-end from inside the admin-service pod, 2026-08-31:
+      #     nslookup auth-dev.fitmate.me -> 10.43.242.124 (= traefik.traefik ClusterIP, exact)
+      #     GET  .../.well-known/openid-configuration      -> HTTP/1.1 200 OK, trusted TLS,
+      #                                                       iss https://auth-dev.fitmate.me/...
+      #     POST .../protocol/openid-connect/token         -> HTTP/1.1 401 Unauthorized
+      # The 401 is the POINT: a Keycloak application-layer answer to a bogus client, i.e. TLS
+      # succeeded and the request reached Keycloak — not a certificate error and not an Access
+      # HTML challenge.
+      #
+      # This entry gives admin-dev.fitmate.me the same in-cluster resolution, which the admin
+      # SPA's browser XHRs and any future server-side self-call depend on.
+      { from = "admin-dev.fitmate.me", to = "traefik.traefik.svc.cluster.local" },
     ]
   }
 
