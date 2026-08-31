@@ -303,6 +303,71 @@ inputs = {
         # Its own tokens must carry aud=fitmate-backend like every other client (KC default is `account`).
         audiences = ["fitmate-backend"]
       },
+      {
+        # ── admin panel token-handler BFF (ADR-066 / SCRUM-323 / spec 071) ────────────────────
+        # The BROWSER leg of admin-service. admin-service runs the authorization-code + PKCE
+        # exchange SERVER-SIDE with this client and hands the browser an HttpOnly cookie; the
+        # access token never enters the browser (RFC 10017 §6.1).
+        #
+        # ⚠️ THIS IS DELIBERATELY A SECOND CLIENT, NOT `standard_flow_enabled = true` ON
+        #    `fitmate-admin-backend` ABOVE. The obvious "saving" of reusing that client is a real
+        #    security regression, for four reasons — the first is decisive:
+        #
+        #  1. BLAST RADIUS. fitmate-admin-backend's service account holds realm-management
+        #     manage-users + view-users. Merging the browser leg into it means ONE leaked secret
+        #     grants both "can start a login" AND "can rewrite every user in the realm". Split, a
+        #     compromise of the browser-facing secret buys only the former.
+        #  2. CONTRADICTORY SETTINGS. This client needs redirect URIs, web origins, post-logout
+        #     URIs and PKCE; a machine identity must have NONE of them. One resource cannot hold
+        #     both without that client's own "never used in a browser" comment becoming false.
+        #  3. ROLLBACK. ADR-066 states rollback is "removing one Terraform client" — true only
+        #     with a sibling. Editing the shared client instead makes rollback a risky edit to a
+        #     resource admin-service's Admin-API path already depends on.
+        #  4. AUDIT. "Which client did this login come from" stays answerable.
+        #
+        # service_accounts stays OFF: this client authenticates USERS. The machine identity is
+        # still fitmate-admin-backend, and admin-service holds both secrets for different jobs.
+        client_id                    = "fitmate-admin-bff"
+        name                         = "FITMate Admin Panel (token-handler BFF)"
+        access_type                  = "CONFIDENTIAL" # secret pushed to Vault below; held server-side only
+        standard_flow_enabled        = true           # Authorization Code — THE reason this client exists
+        direct_access_grants_enabled = false          # no password grant
+        service_accounts_enabled     = false          # NOT a machine identity — see fitmate-admin-backend
+        # PKCE even though the client is confidential: RFC 9700 §2.1.1 requires it for every
+        # authorization-code client, not only public ones. It binds the callback to the request
+        # that started it, which a client secret alone does not do.
+        pkce_code_challenge_method = "S256"
+
+        # ── Redirect URI: admin-SERVICE's callback, NOT the SPA's ────────────────────────────
+        # Under a token-handler BFF the redirect URI belongs to the SERVER that performs the code
+        # exchange. The Vite SPA never receives a code and must never appear in this list.
+        #
+        # ⚠️ https AND admin-dev.fitmate.me — both load-bearing, neither is cosmetic:
+        #   • The host is a REAL Let's Encrypt name (shared/init-resources public_host_certs), not
+        #     `admin.k3s.fitmate`. Nothing can serve a trusted cert for a .k3s.fitmate name, and a
+        #     plain-http origin makes the browser DROP the BFF's `Secure` session cookie — login
+        #     appears to succeed and then bounces, which reads as a BFF bug and is not one. Real
+        #     TLS is what lets the cookie be `Secure` in dev AND prod with no per-env weakening.
+        #   • It resolves ONLY to the internal Traefik LB (no public A record, no tunnel route), so
+        #     the panel stays non-internet-reachable until 2FA lands, per ADR-066.
+        # Keycloak matches redirect_uri EXACTLY — scheme, host and path all count.
+        valid_redirect_uris = [
+          "https://admin-dev.fitmate.me/admin/auth/callback",
+        ]
+        # Post-logout is a SEPARATE allowlist in Keycloak 26 — a host valid for login is NOT
+        # thereby valid for logout. Omitting it leaves sign-in working and sign-out failing with
+        # "Invalid parameter: post_logout_redirect_uri", the harder half to attribute.
+        valid_post_logout_redirect_uris = [
+          "https://admin-dev.fitmate.me",
+        ]
+        # CORS for the SPA's XHR calls to /admin/auth/me and the rest of /admin/*. Same origin as
+        # the redirect URI; the code exchange itself is server-side and needs no CORS.
+        web_origins = [
+          "https://admin-dev.fitmate.me",
+        ]
+        # CRITICAL: backend services require aud contains fitmate-backend (Keycloak default aud = account).
+        audiences = ["fitmate-backend"]
+      },
     ], local.e2e_clients)
 
     # e2e test user. firstName/lastName/email/email_verified are REQUIRED for a password-grant
@@ -426,6 +491,19 @@ inputs = {
       # Its OWN path (not admin/params): vault_kv_secret_v2 manages a path's whole data map, so
       # writing into admin/params would clobber every other param key.
       "fitmate-admin-backend" = { path = "${local.environment}/admin/keycloak/creds", key = "KEYCLOAK_CLIENTSECRET" }
+      # ADR-066 BFF client secret → ESO → the fitmate-admin-<env> namespace, alongside the
+      # Admin-API secret above. Its OWN path for the same reason that one has one:
+      # vault_kv_secret_v2 manages a path's WHOLE data map, so writing a second key into
+      # admin/keycloak/creds would clobber KEYCLOAK_CLIENTSECRET on every apply.
+      #
+      # ⚠️ DISTINCT KEY NAME. admin-service will hold BOTH secrets and they are not
+      # interchangeable: KEYCLOAK_CLIENTSECRET authenticates the Admin-REST machine identity,
+      # KEYCLOAK_BFFCLIENTSECRET authenticates the browser login exchange. Reusing one name for
+      # both is how the browser-facing secret silently acquires manage-users.
+      #
+      # No underscore in the key: viper binds env-overrides by exact key and the existing
+      # KEYCLOAK_* keys in prod-secrets-env-inventory are unpunctuated. Do NOT rename.
+      "fitmate-admin-bff" = { path = "${local.environment}/admin/keycloak/bff-creds", key = "KEYCLOAK_BFFCLIENTSECRET" }
       }, local.environment == "prod" ? {} : {
       # e2e harness secret (IN-17). Its OWN path — vault_kv_secret_v2 manages a path's whole data
       # map, so writing into an existing params path would clobber every other key there.
