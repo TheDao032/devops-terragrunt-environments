@@ -299,7 +299,28 @@ inputs = {
         service_accounts_enabled     = true           # THE machine identity
         # Least privilege: create/read users + assign realm roles. Deliberately NOT "realm-admin",
         # which is full control of the realm — a leaked secret would then own the whole IdP.
-        service_account_roles = ["manage-users", "view-users"]
+        #
+        # 🔴 `view-realm` IS REQUIRED TO ASSIGN A REALM ROLE — do not "tidy" it away as unused.
+        # Keycloak's role-mapping API takes the role's **id**, not its name, so
+        # KeycloakProvider.AssignRole does a `GET /admin/realms/{realm}/roles/{name}` first
+        # (keycloak_provider.go:181, documented in that file's trap #3). That GET is gated by
+        # `view-realm`; manage-users alone authorises the POST that follows but NOT the lookup
+        # before it.
+        #
+        # Without it, every code path that assigns a realm role fails AFTER the Keycloak user has
+        # been created — leaving an ORPHAN identity (docs/admin-users.md §"AssignRole fails"):
+        #   • `bootstrap-admin` aborts mid-run, and is one-shot, so the retry then hits
+        #     EmailAlreadyTaken and the orphan must be deleted by hand first;
+        #   • POST /api/v1/admins (create_admin/handler.go:104) 500s the same way — so this is a
+        #     live defect in the panel's own admin-creation flow, not only a bootstrap concern.
+        #
+        # MEASURED 2026-09-01 against fitmate-dev, with controls: the service account's token
+        # carried [manage-users view-users query-groups query-users] and got **403** on
+        # GET /roles/administrator (a bogus role name ALSO returned 403, not 404 — proving authz,
+        # not a missing role), while a realm-admin token got **200** on the same path. Granting
+        # `query-realms` alone left it at 403; `view-realm` moved it to 200. So this is the
+        # narrowest role that works — it was chosen by testing the narrower one first, not assumed.
+        service_account_roles = ["manage-users", "view-users", "view-realm"]
         # Its own tokens must carry aud=fitmate-backend like every other client (KC default is `account`).
         audiences = ["fitmate-backend"]
       },
