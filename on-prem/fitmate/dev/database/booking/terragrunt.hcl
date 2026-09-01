@@ -63,8 +63,15 @@ inputs = {
         "booking_ro_${local.environment}"  = { login = true, password = dependency.vault-secrets.outputs.secrets["database/booking/ro/creds"]["password"] }
       }
       grants = [
-        { role = "booking_ro_${local.environment}", schema = "app", object_type = "schema", privileges = ["USAGE"] },
-        { role = "booking_ro_${local.environment}", schema = "app", object_type = "table", privileges = ["SELECT"], on_future = true, owner = "booking_app_${local.environment}" },
+        # Tables live in `public`, NOT `app`: search_path is "$user", public, so every migration
+        # creates its tables in public. Schema `app` is provisioned but has never held a table —
+        # grants aimed at it applied cleanly and granted access to nothing (B-323a).
+        { role = "booking_ro_${local.environment}", schema = "public", object_type = "schema", privileges = ["USAGE"] },
+        # EXISTING tables. Default privileges are future-only by definition, so tables created by
+        # migrations that have ALREADY run need this present-tense grant (empty `objects` = all current).
+        { role = "booking_ro_${local.environment}", schema = "public", object_type = "table", privileges = ["SELECT"] },
+        # FUTURE tables the app role creates (later migrations) — default privilege.
+        { role = "booking_ro_${local.environment}", schema = "public", object_type = "table", privileges = ["SELECT"], on_future = true, owner = "booking_app_${local.environment}" },
       ]
     }
   }

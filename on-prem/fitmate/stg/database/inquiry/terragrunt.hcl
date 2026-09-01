@@ -62,8 +62,15 @@ inputs = {
         "inquiry_ro_${local.environment}"  = { login = true, password = dependency.vault-secrets.outputs.secrets["database/inquiry/ro/creds"]["password"] }
       }
       grants = [
-        { role = "inquiry_ro_${local.environment}", schema = "app", object_type = "schema", privileges = ["USAGE"] },
-        { role = "inquiry_ro_${local.environment}", schema = "app", object_type = "table", privileges = ["SELECT"], on_future = true, owner = "inquiry_app_${local.environment}" },
+        # Tables live in `public`, NOT `app`: search_path is "$user", public, so every migration
+        # creates its tables in public. Schema `app` is provisioned but has never held a table —
+        # grants aimed at it applied cleanly and granted access to nothing (B-323a).
+        { role = "inquiry_ro_${local.environment}", schema = "public", object_type = "schema", privileges = ["USAGE"] },
+        # EXISTING tables. Default privileges are future-only by definition, so tables created by
+        # migrations that have ALREADY run need this present-tense grant (empty `objects` = all current).
+        { role = "inquiry_ro_${local.environment}", schema = "public", object_type = "table", privileges = ["SELECT"] },
+        # FUTURE tables the app role creates (later migrations) — default privilege.
+        { role = "inquiry_ro_${local.environment}", schema = "public", object_type = "table", privileges = ["SELECT"], on_future = true, owner = "inquiry_app_${local.environment}" },
       ]
     }
   }
