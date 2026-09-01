@@ -125,6 +125,18 @@ locals {
     # ── Keycloak realm seed user (per-env realm) — e2e password-grant fixture.
     "keycloak/fitmate/trainee1/creds" = { username = "trainee1", password = "{ _RANDOM_ = 16 }" }
 
+    # ── Keycloak admin-panel seed user (SCRUM-323) — BROWSER sign-in fixture for admin-dev.
+    # Separate Vault path from trainee1 because vault_kv_secret_v2 manages a path's WHOLE data map:
+    # a second key written into trainee1/creds would clobber it on every apply.
+    #
+    # ⚠️ The `username` field here is STORAGE METADATA, not the login identifier. Nothing reads it —
+    # the keycloak unit consumes only ["password"] — and the realm has registration_email_as_username
+    # on, so the identifier Dao types is the EMAIL. It is written as the email anyway so that a reader
+    # of the Vault path is not told a name that would be rejected at the login form (trainee1's entry
+    # predates ADR-050 and still carries the bare name; left alone here to avoid a no-op diff on the
+    # e2e fixture).
+    "keycloak/fitmate/admin1/creds" = { username = "admin1@fitmate.local", password = "{ _RANDOM_ = 16 }" }
+
     # ── Per-service Keycloak token-validation config (NON-secret; issuer/audience/JWKS). ESO syncs
     #    each <svc>/params into a <svc>-keycloak Secret the service reads. ISSUER = the browser-facing
     #    host (must equal token `iss`); JWKSURL = the in-cluster Service (pods can't resolve the host).
