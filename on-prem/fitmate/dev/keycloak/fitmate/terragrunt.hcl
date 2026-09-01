@@ -351,14 +351,32 @@ inputs = {
         #   • It resolves ONLY to the internal Traefik LB (no public A record, no tunnel route), so
         #     the panel stays non-internet-reachable until 2FA lands, per ADR-066.
         # Keycloak matches redirect_uri EXACTLY — scheme, host and path all count.
+        #
+        # 🔴 `/api/v1` IS LOAD-BEARING — do not "tidy" it away (ADR-071).
+        # admin-service registers EVERY handler inside router.Group("/api/v1") (routes.go:67),
+        # and the callback path is composed in Go as
+        #   AuthCallbackURI = "/api/v1" + AuthGroupPath + AuthCallbackRoute
+        #                   = /api/v1/admin/auth/callback          (auth_handler.go:88-95)
+        # ADR-066 L67 and ADR-067 L113 both wrote this path WITHOUT the prefix; this file was
+        # authored from them. ADR-071 supersedes that line — the prefix is correct, the ADRs
+        # were not. A mismatch here fails on Keycloak's OWN error page and never reaches our
+        # logs, so it reads as "the BFF is broken" when the BFF is fine.
         valid_redirect_uris = [
-          "https://admin-dev.fitmate.me/admin/auth/callback",
+          "https://admin-dev.fitmate.me/api/v1/admin/auth/callback",
         ]
         # Post-logout is a SEPARATE allowlist in Keycloak 26 — a host valid for login is NOT
         # thereby valid for logout. Omitting it leaves sign-in working and sign-out failing with
         # "Invalid parameter: post_logout_redirect_uri", the harder half to attribute.
+        #
+        # 🔴 This is the LOGIN PAGE path, not the bare origin. The BFF sends
+        #   post_logout_redirect_uri = <adminAuth.publicBaseURL> + frontendLoginPath
+        # where frontendLoginPath = "/login" (auth_handler.go:77, used at :613). Keycloak's
+        # RedirectUtils.matchesRedirects compares with String.equals when the entry carries no
+        # "*", so an ORIGIN DOES NOT COVER ITS SUB-PATHS — the bare host would not match.
+        # "+" is not a substitute either: it inherits valid_redirect_uris, which is the
+        # CALLBACK path, not this one. `/login` is served by admin-website (pathPrefix `/`).
         valid_post_logout_redirect_uris = [
-          "https://admin-dev.fitmate.me",
+          "https://admin-dev.fitmate.me/login",
         ]
         # CORS for the SPA's XHR calls to /admin/auth/me and the rest of /admin/*. Same origin as
         # the redirect URI; the code exchange itself is server-side and needs no CORS.
