@@ -51,6 +51,7 @@ dependency "vault-secrets" {
   mock_outputs = {
     secrets = {
       "keycloak/fitmate/trainee1/creds" = { username = "trainee1", password = "MOCK" }
+      "keycloak/fitmate/admin1/creds"   = { username = "admin1@fitmate.local", password = "MOCK" }
     }
   }
   # plan/validate may use mocks (fills a newly-added sub-key); apply requires real applied outputs.
@@ -299,7 +300,28 @@ inputs = {
         service_accounts_enabled     = true           # THE machine identity
         # Least privilege: create/read users + assign realm roles. Deliberately NOT "realm-admin",
         # which is full control of the realm — a leaked secret would then own the whole IdP.
-        service_account_roles = ["manage-users", "view-users"]
+        #
+        # 🔴 `view-realm` IS REQUIRED TO ASSIGN A REALM ROLE — do not "tidy" it away as unused.
+        # Keycloak's role-mapping API takes the role's **id**, not its name, so
+        # KeycloakProvider.AssignRole does a `GET /admin/realms/{realm}/roles/{name}` first
+        # (keycloak_provider.go:181, documented in that file's trap #3). That GET is gated by
+        # `view-realm`; manage-users alone authorises the POST that follows but NOT the lookup
+        # before it.
+        #
+        # Without it, every code path that assigns a realm role fails AFTER the Keycloak user has
+        # been created — leaving an ORPHAN identity (docs/admin-users.md §"AssignRole fails"):
+        #   • `bootstrap-admin` aborts mid-run, and is one-shot, so the retry then hits
+        #     EmailAlreadyTaken and the orphan must be deleted by hand first;
+        #   • POST /api/v1/admins (create_admin/handler.go:104) 500s the same way — so this is a
+        #     live defect in the panel's own admin-creation flow, not only a bootstrap concern.
+        #
+        # MEASURED 2026-09-01 against fitmate-dev, with controls: the service account's token
+        # carried [manage-users view-users query-groups query-users] and got **403** on
+        # GET /roles/administrator (a bogus role name ALSO returned 403, not 404 — proving authz,
+        # not a missing role), while a realm-admin token got **200** on the same path. Granting
+        # `query-realms` alone left it at 403; `view-realm` moved it to 200. So this is the
+        # narrowest role that works — it was chosen by testing the narrower one first, not assumed.
+        service_account_roles = ["manage-users", "view-users", "view-realm"]
         # Its own tokens must carry aud=fitmate-backend like every other client (KC default is `account`).
         audiences = ["fitmate-backend"]
       },
@@ -410,6 +432,40 @@ inputs = {
         email_verified = true
         realm_roles    = ["trainee"]
       },
+      # ── admin panel sign-in fixture (SCRUM-323) ────────────────────────────────────────────────
+      # The fitmate-dev realm had NO user holding `administrator`, so admin-dev.fitmate.me could not
+      # be signed into at all — the panel was untestable for reasons that live entirely in the realm.
+      #
+      # 🔴 THIS USER ALONE DOES NOT GRANT ACCESS TO THE PANEL. admin-service applies TWO independent
+      # gates in its BFF callback (internal/api/http/v1/auth_handler.go:394 and :411):
+      #   1. the realm role checked here, and
+      #   2. a row in the admin_users table keyed on this user's Keycloak `sub`.
+      # Gate 2 is NOT managed by Terraform and `admin_users` is EMPTY in dev (verified 2026-09-01,
+      # `select count(*)` = 0), so after this applies sign-in still stops — at `no_admin_record`
+      # rather than `forbidden`. Creating that row is the documented `bootstrap-admin` one-shot, and
+      # bootstrap-admin REFUSES an email that already exists in Keycloak (startup/bootstrap_admin.go
+      # :124). See the PR body for the ordering that avoids that deadlock — do not apply this unit
+      # for admin1 expecting a working login without reading it.
+      {
+        # `administrator`, NOT `admin`: Keycloak 26.4.0+ has an FGAP regression that blocks a realm
+        # role literally named `admin`, so every FitMate service gates on `administrator`
+        # (pkg/constants/roles.go). The route guard is an EXACT string match, not a hierarchy.
+        #
+        # `super_admin` is deliberately NOT granted. It would be least-privilege noise here: the
+        # route guard requires `administrator` and nothing else, and the super-admin-only operations
+        # are authorised off the admin_users row's `role` column, not off the token
+        # (routes.go:26-30). bootstrap-admin grants both only because it creates a super_admin row.
+        key        = "admin1"
+        username   = "admin1@fitmate.local"
+        email      = "admin1@fitmate.local"
+        first_name = "Admin"
+        last_name  = "One"
+        # Load-bearing, not cosmetic: KC26's declarative user profile otherwise triggers
+        # VERIFY_PROFILE and the login fails with "Account is not fully set up" and an EMPTY
+        # requiredActions list — which reads as a broken realm, not a misconfigured user.
+        email_verified = true
+        realm_roles    = ["administrator"]
+      },
     ]
 
     # ── Social login (IN-14) ────────────────────────────────────────────────────────────────────
@@ -495,6 +551,11 @@ inputs = {
   # The Vault PATH keeps its own name (keycloak/fitmate/trainee1/creds) — that is storage, not identity.
   user_passwords = {
     "trainee1@fitmate.local" = dependency.vault-secrets.outputs.secrets["keycloak/fitmate/trainee1/creds"]["password"]
+    # 🔴 Keyed by USERNAME (the email), NOT by the `key` state address above. users.tf does
+    # `lookup(var.user_passwords, each.value.username, "")`, so keying this "admin1" would MISS,
+    # drop the initial_password block, and create the user with NO PASSWORD — which surfaces at the
+    # login form as wrong-credentials against a correctly-created user.
+    "admin1@fitmate.local" = dependency.vault-secrets.outputs.secrets["keycloak/fitmate/admin1/creds"]["password"]
   }
 
   # Hand the GENERATED fitmate-website secret straight to Vault → ESO → website (no manual copy).
