@@ -209,6 +209,55 @@ locals {
       DATABASE_READ_DB_CONNECTION_STRING  = "postgresql://admin_ro_${local.environment}:{{database/admin/ro/creds:password}}@192.168.105.10:5432/admin_${local.environment}?sslmode=disable"
     }
 
+    # ── admin-service bootstrap super_admin password (SCRUM-323, ADR-072) ───────────────────────
+    #
+    # Consumed by the ArgoCD Sync-phase Job at sync-wave -1 (mirroring the migrate Job at -2), which
+    # runs `admin-service bootstrap-admin --if-not-exists` to create the FIRST super_admin. There is
+    # no public admin sign-up, and CreateAdmin itself requires an existing super_admin, so without
+    # this there is no path to admin #1. It replaces provisioning that first account by a hand-run
+    # command — the credential now lives in Vault instead of an operator's shell history.
+    #
+    # 🔴 ITS OWN PATH, NOT admin/params. vault_kv_secret_v2 manages a path's ENTIRE data map, so
+    #    writing this key into admin/params would clobber every other key there on the next apply.
+    #    Same reason KEYCLOAK_CLIENTSECRET sits alone at admin/keycloak/creds. Do not "tidy" these
+    #    into one doc.
+    #
+    # 🔴 THE KEY NAME IS THE CONTRACT. The gitops overlay consumes this doc with `dataFrom.extract`,
+    #    which maps Vault keys STRAIGHT THROUGH to env var names, and the binary reads
+    #    os.Getenv("BOOTSTRAP_ADMIN_PASSWORD") (startup/bootstrap_admin.go:71). Rename the key and
+    #    the Job fails with "BOOTSTRAP_ADMIN_PASSWORD must be at least 12 characters" — because the
+    #    var is EMPTY, not because the password is short. Nothing else reads this doc.
+    #
+    # 🔴 THIS IS THE INITIAL PASSWORD ONLY — IT IS NOT AUTHORITATIVE AFTER FIRST RUN.
+    #    bootstrap-admin is one-shot: once the local admins row exists, --if-not-exists makes it a
+    #    logged no-op with exit 0 (that is the whole point of the flag — the Job carries
+    #    hook-delete-policy BeforeHookCreation and re-runs on EVERY sync). So changing this value
+    #    and re-applying does NOT change the account's password in Keycloak; it only changes what a
+    #    hypothetical FRESH bootstrap would use. Rotation happens in Keycloak's account console.
+    #    A reader who finds this path months from now and types the value into the login form will
+    #    be locked out and will blame the wrong system.
+    #
+    # 🔴 BOOTSTRAP_ADMIN_EMAIL / _NAME ARE NOT HERE, AND THE EMAIL IS LOAD-BEARING. Both are
+    #    non-secret and belong in the gitops values. But bootstrap-admin REFUSES an email that
+    #    already exists in Keycloak, and that refusal is deliberately NOT relaxed by --if-not-exists
+    #    (bootstrap_admin.go:155-166) — it would fail the sync forever, not once. `admin1@fitmate.local`
+    #    IS already seeded in this realm by dev/keycloak/fitmate (PR #61, merged + applied; keycloak
+    #    sub c1d1da34-…), so the Job MUST use a different email (e.g. bootstrap-admin@fitmate.local)
+    #    or that user must be deleted from Keycloak first. See the note on the admin1 user in
+    #    dev/keycloak/fitmate/terragrunt.hcl.
+    #
+    # Length 24 vs the hard floor of 12 (readBootstrapEnv, bootstrap_admin.go:224): the value is
+    # never typed by a human on the happy path — the Job reads it from the environment — so there is
+    # no ergonomic reason to keep it short, and the extra entropy is free. Charset is the module's
+    # override_special "!()-_=+" plus alphanumerics; the consumer must pass it via envFrom/valueFrom,
+    # NOT interpolate it into a shell command, or those characters will be re-parsed.
+    #
+    # ESO access needs NO policy change: fitmate-admin-dev-eso grants read on
+    # fitmate/data/dev/admin/* and a Vault trailing `*` spans `/`. Verified 2026-09-01 with a token
+    # carrying only that policy: dev/admin/keycloak/creds (nested, existing) -> 200,
+    # dev/admin/bootstrap/creds -> 404 (permitted, absent), dev/trainee/params -> 403 (control).
+    "admin/bootstrap/creds" = { BOOTSTRAP_ADMIN_PASSWORD = "{ _RANDOM_ = 24 }" }
+
     # payment is WRITE-ONLY (matches the `database/payment/app/creds` note above — no RO role exists).
     # Its live Secret has exactly 4 keys: no DATABASE_READ, no Kafka, no Redis. Do NOT "normalise" this
     # to match the others — payment runs Kafka in mock mode in dev and uses no cache.
