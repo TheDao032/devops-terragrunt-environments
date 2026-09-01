@@ -51,6 +51,7 @@ dependency "vault-secrets" {
   mock_outputs = {
     secrets = {
       "keycloak/fitmate/trainee1/creds" = { username = "trainee1", password = "MOCK" }
+      "keycloak/fitmate/admin1/creds"   = { username = "admin1@fitmate.local", password = "MOCK" }
     }
   }
   # plan/validate may use mocks (fills a newly-added sub-key); apply requires real applied outputs.
@@ -431,6 +432,40 @@ inputs = {
         email_verified = true
         realm_roles    = ["trainee"]
       },
+      # ── admin panel sign-in fixture (SCRUM-323) ────────────────────────────────────────────────
+      # The fitmate-dev realm had NO user holding `administrator`, so admin-dev.fitmate.me could not
+      # be signed into at all — the panel was untestable for reasons that live entirely in the realm.
+      #
+      # 🔴 THIS USER ALONE DOES NOT GRANT ACCESS TO THE PANEL. admin-service applies TWO independent
+      # gates in its BFF callback (internal/api/http/v1/auth_handler.go:394 and :411):
+      #   1. the realm role checked here, and
+      #   2. a row in the admin_users table keyed on this user's Keycloak `sub`.
+      # Gate 2 is NOT managed by Terraform and `admin_users` is EMPTY in dev (verified 2026-09-01,
+      # `select count(*)` = 0), so after this applies sign-in still stops — at `no_admin_record`
+      # rather than `forbidden`. Creating that row is the documented `bootstrap-admin` one-shot, and
+      # bootstrap-admin REFUSES an email that already exists in Keycloak (startup/bootstrap_admin.go
+      # :124). See the PR body for the ordering that avoids that deadlock — do not apply this unit
+      # for admin1 expecting a working login without reading it.
+      {
+        # `administrator`, NOT `admin`: Keycloak 26.4.0+ has an FGAP regression that blocks a realm
+        # role literally named `admin`, so every FitMate service gates on `administrator`
+        # (pkg/constants/roles.go). The route guard is an EXACT string match, not a hierarchy.
+        #
+        # `super_admin` is deliberately NOT granted. It would be least-privilege noise here: the
+        # route guard requires `administrator` and nothing else, and the super-admin-only operations
+        # are authorised off the admin_users row's `role` column, not off the token
+        # (routes.go:26-30). bootstrap-admin grants both only because it creates a super_admin row.
+        key        = "admin1"
+        username   = "admin1@fitmate.local"
+        email      = "admin1@fitmate.local"
+        first_name = "Admin"
+        last_name  = "One"
+        # Load-bearing, not cosmetic: KC26's declarative user profile otherwise triggers
+        # VERIFY_PROFILE and the login fails with "Account is not fully set up" and an EMPTY
+        # requiredActions list — which reads as a broken realm, not a misconfigured user.
+        email_verified = true
+        realm_roles    = ["administrator"]
+      },
     ]
 
     # ── Social login (IN-14) ────────────────────────────────────────────────────────────────────
@@ -516,6 +551,11 @@ inputs = {
   # The Vault PATH keeps its own name (keycloak/fitmate/trainee1/creds) — that is storage, not identity.
   user_passwords = {
     "trainee1@fitmate.local" = dependency.vault-secrets.outputs.secrets["keycloak/fitmate/trainee1/creds"]["password"]
+    # 🔴 Keyed by USERNAME (the email), NOT by the `key` state address above. users.tf does
+    # `lookup(var.user_passwords, each.value.username, "")`, so keying this "admin1" would MISS,
+    # drop the initial_password block, and create the user with NO PASSWORD — which surfaces at the
+    # login form as wrong-credentials against a correctly-created user.
+    "admin1@fitmate.local" = dependency.vault-secrets.outputs.secrets["keycloak/fitmate/admin1/creds"]["password"]
   }
 
   # Hand the GENERATED fitmate-website secret straight to Vault → ESO → website (no manual copy).
