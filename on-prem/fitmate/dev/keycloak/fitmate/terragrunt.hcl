@@ -408,6 +408,57 @@ inputs = {
         # CRITICAL: backend services require aud contains fitmate-backend (Keycloak default aud = account).
         audiences = ["fitmate-backend"]
       },
+      {
+        # ── trainee-service backend (spec 074 / SCRUM-348, T003) ──────────────────────────────
+        # A MACHINE identity, not a browser client. At trainee-profile-creation time trainee-service
+        # calls the Keycloak ADMIN REST API as itself (client_credentials) to map the `trainee` realm
+        # role onto the user who just self-registered. No user logs in through it, hence
+        # standard_flow/direct_grants OFF; service_accounts ON is THE machine identity.
+        #
+        # This is the SAME pattern as fitmate-admin-backend above (B-047) — a second, service-scoped
+        # confidential client, deliberately NOT a reuse of fitmate-admin-backend. Two reasons, the
+        # first decisive:
+        #   1. BLAST RADIUS / AUDIT. admin-backend's account can rewrite every user in the realm.
+        #      A separate client means a leaked trainee secret buys only "assign trainee role", and
+        #      "which service assigned this role" stays answerable.
+        #   2. LIFECYCLE. trainee-service and admin-service rotate/rollback independently; one client
+        #      per consumer keeps that independent.
+        client_id                    = "fitmate-trainee-backend"
+        name                         = "FITMate Trainee Service (backend)"
+        access_type                  = "CONFIDENTIAL" # issues the client_secret pushed to Vault below
+        standard_flow_enabled        = false          # never used in a browser
+        direct_access_grants_enabled = false          # no password grant
+        service_accounts_enabled     = true           # THE machine identity
+        # ── Least privilege: NARROWER than admin-backend's grant, by design ───────────────────────
+        # admin-backend holds ["manage-users", "view-users", "view-realm"]; trainee-service holds
+        # only ["manage-users", "view-realm"] — view-users is DROPPED.
+        #
+        # 🔴 `view-realm` IS REQUIRED TO ASSIGN A REALM ROLE — do not "tidy" it away as unused.
+        # Keycloak's role-mapping API takes the role's **id**, not its name, so assigning `trainee`
+        # begins with `GET /admin/realms/{realm}/roles/trainee` to resolve the id. That GET is gated
+        # by `view-realm`; manage-users alone authorises the role-mapping POST that FOLLOWS but NOT
+        # the lookup before it. MEASURED 2026-09-01 against this realm (admin-backend trap #3):
+        # a token with [manage-users view-users] got 403 on GET /roles/{name}; view-realm moved it to
+        # 200. Without it every assign fails AFTER the role lookup, and the caller cannot map the role.
+        #
+        # `view-users` is intentionally OMITTED (unlike admin-backend, which lists/searches users).
+        # trainee-service operates on the user it already knows — the authenticated caller's `sub`
+        # from the request JWT — so it never lists or searches the user directory. `manage-users`
+        # alone authorises BOTH the role-mapping POST /users/{sub}/role-mappings/realm AND a GET on
+        # that one user (Keycloak permits per-user read with manage-users OR view-users). So the Go
+        # side MUST operate by `sub` and MUST NOT call GET /users?search=… or list users — that path
+        # needs view-users/query-users and would 403. This is the contract the service codes against.
+        #
+        # ⚠️ A mapper scoped to ONLY the `trainee` role (the ideal) is NOT expressible here. That is
+        # Keycloak fine-grained admin permissions (FGAPv2), which (a) this shared module does not
+        # model — service_account_roles takes realm-management client-role NAMES only, and (b) is
+        # under an active KC 26.4.0+ regression already biting this repo (roles literally named
+        # `admin`, keycloak#43579/#44371). So `manage-users` is the narrowest EXPRESSIBLE grant, per
+        # the explicit fallback in the T003 handoff. Revisit if/when FGAPv2 stabilises.
+        service_account_roles = ["manage-users", "view-realm"]
+        # Its own tokens must carry aud=fitmate-backend like every other client (KC default is `account`).
+        audiences = ["fitmate-backend"]
+      },
     ], local.e2e_clients)
 
     # e2e test user. firstName/lastName/email/email_verified are REQUIRED for a password-grant
@@ -570,6 +621,13 @@ inputs = {
       # Its OWN path (not admin/params): vault_kv_secret_v2 manages a path's whole data map, so
       # writing into admin/params would clobber every other param key.
       "fitmate-admin-backend" = { path = "${local.environment}/admin/keycloak/creds", key = "KEYCLOAK_CLIENTSECRET" }
+      # trainee-service's Admin-API client secret (spec 074 / SCRUM-348) → ESO → the
+      # fitmate-trainee-<env> namespace. Its OWN path (not trainee/params): vault_kv_secret_v2
+      # manages a path's WHOLE data map, so writing into trainee/params would clobber
+      # KEYCLOAK_ISSUER / KEYCLOAK_JWKSURL / the DB DSNs already there on every apply.
+      # ESO needs NO policy change: fitmate-trainee-<env>-eso reads fitmate/data/<env>/trainee/*
+      # and a Vault trailing `*` spans `/` (same property relied on for admin/keycloak/creds).
+      "fitmate-trainee-backend" = { path = "${local.environment}/trainee/keycloak/creds", key = "KEYCLOAK_CLIENTSECRET" }
       # ADR-066 BFF client secret → ESO → the fitmate-admin-<env> namespace, alongside the
       # Admin-API secret above. Its OWN path for the same reason that one has one:
       # vault_kv_secret_v2 manages a path's WHOLE data map, so writing a second key into
