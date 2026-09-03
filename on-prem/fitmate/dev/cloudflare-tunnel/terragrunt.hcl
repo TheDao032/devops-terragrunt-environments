@@ -125,8 +125,63 @@ inputs = {
   # ℹ️ Note for whoever tests the login: auth-dev.fitmate.me IS Access-gated to a single email, so
   # the sign-in redirect meets a Cloudflare challenge BEFORE Keycloak's login page. Expected, and
   # it means a test with any other identity fails at Cloudflare rather than at Keycloak.
+  # ── api-dev.fitmate.me: the PUBLIC API SURFACE (spec 073 FR-026 / SCRUM-335, ADR-058) ─────────
+  # ADR-058 settles the topology: the Flutter app calls the API DIRECTLY over a public HTTPS host
+  # (RFC 8252 — a native app has an OS keystore, so it does not need, and must not be given, the
+  # browser's BFF). ONE host, PATH-routed — `api-dev.fitmate.me/api/v1/{service}/...` — explicitly
+  # NOT per-service subdomains. This entry is the hostname half of that; the HTTPRoute that gives it
+  # a backend is spec 073's application work and does not exist yet.
+  #
+  # ⚠️ Same flat-name rule as auth-dev/web-dev: `api-dev`, NOT `api.dev`. See the Universal SSL note
+  # above — a second label falls outside `*.fitmate.me` and fails the TLS handshake outright.
+  #
+  # ── WHY THERE IS NO cert-manager CERTIFICATE HERE ────────────────────────────────────────────
+  # This host needs NOTHING in shared/init-resources `public_host_certs`, and no coredns rewrite.
+  # Traced against the three patterns actually running on this cluster (verified live 2026-09-03):
+  #
+  #   auth-dev   tunnel + cert + coredns rewrite   parentRefs: web AND websecure
+  #              -> has a cert ONLY because in-cluster pods (the website's Auth.js code exchange
+  #                 and token refresh) call it BY PUBLIC NAME over trusted TLS via split horizon.
+  #   admin-dev  cert + coredns rewrite, NO tunnel parentRefs: websecure
+  #              -> not public at all (ADR-066); cert exists for the browser's `Secure` cookie.
+  #   web-dev    tunnel ONLY, no cert, no rewrite  parentRefs: web
+  #              -> Cloudflare terminates TLS at the edge with the free Universal SSL cert
+  #                 (CN=fitmate.me, SANs fitmate.me + *.fitmate.me); the origin hop is plain HTTP.
+  #
+  # api-dev is the **web-dev** case exactly: its callers are on the INTERNET (the Flutter app), and
+  # nothing inside the cluster resolves it — service-to-service traffic uses cluster FQDNs and the
+  # website uses its own BFF. No in-cluster caller means no split horizon, which means no need for a
+  # trusted cert on Traefik. Confirmed: there is no `web-dev-fitmate-me-tls` Certificate and web-dev
+  # serves valid TLS anyway.
+  #
+  # 🔴 THEREFORE spec 073's HTTPRoute MUST attach with `sectionName: web`, matching the website's.
+  #    Attaching it to `websecure` instead makes Traefik answer that SNI with its DEFAULT cert —
+  #    and because the tunnel's origin hop is plain HTTP :80, a websecure-only route also has no
+  #    listener on the path traffic actually arrives on. Both failures look like a routing bug.
+  #
+  # ── 🔴 DELIBERATELY *NOT* ACCESS-GATED — THIS IS A SECURITY DECISION, NOT AN OVERSIGHT ───────
+  # auth-dev and web-dev are BOTH gated in ../cloudflare-access on the reasoning "its only users are
+  # us." That reasoning CANNOT transfer here: Cloudflare Access is an interactive browser
+  # interstitial, and a native Flutter client cannot complete it. Gating this host would not harden
+  # the API, it would make spec 073 impossible — the app would receive the Access login HTML instead
+  # of JSON. (A service token is the only machine path through Access, and shipping one inside a
+  # distributed mobile binary is strictly worse than not gating.)
+  #
+  # So authorization for this host is the API's OWN bearer-token auth, and nothing else. That raises
+  # two obligations that live in spec 073's HTTPRoute, NOT here — flagged because THIS entry is what
+  # makes them internet-reachable:
+  #   1. 🔴 `/internal/v1/*` MUST NOT be routed onto this host. It carries UNAUTHENTICATED
+  #      withdrawal approval. Route `/api/v1` only — a bare `/` prefix would expose it.
+  #   2. `/health` is probed in-cluster and must not be edge-reachable either.
+  #
+  # ⚠️ EXPECT 404 UNTIL SPEC 073 SYNCS ITS HTTPRoute. Verified 2026-09-03: no HTTPRoute anywhere on
+  # the cluster claims this hostname, so the tunnel will forward into Traefik's 404. That is the
+  # correct order — reachability first, then the app — and the 404 is the signal the tunnel works.
+  # It is NOT a routing bug to chase. It also means nothing can silently lose a Gateway API conflict
+  # on oldest-creation-timestamp here: the hostname is unclaimed.
   routes = [
     { hostname = "auth-dev.fitmate.me", service = "http://traefik.traefik.svc.cluster.local:80" },
     { hostname = "web-dev.fitmate.me", service = "http://traefik.traefik.svc.cluster.local:80" },
+    { hostname = "api-dev.fitmate.me", service = "http://traefik.traefik.svc.cluster.local:80" },
   ]
 }
