@@ -121,6 +121,11 @@ locals {
     "database/admin/ro/creds"    = { username = "admin_ro_${local.environment}", password = "{ _RANDOM_ = 18 }" }
     # payment — WRITE-ONLY today (gateway unbuilt) → app role only, no ro.
     "database/payment/app/creds" = { username = "payment_app_${local.environment}", password = "{ _RANDOM_ = 18 }" }
+    # notification (SCRUM-427, spec 077) — the in-app inbox read model. BOTH roles: the service
+    # reads DATABASE_READ_* and DATABASE_WRITE_* as separate DSNs (config/config.py), and the
+    # projection handler writes while the inbox route reads.
+    "database/notification/app/creds" = { username = "notification_app_${local.environment}", password = "{ _RANDOM_ = 18 }" }
+    "database/notification/ro/creds"  = { username = "notification_ro_${local.environment}", password = "{ _RANDOM_ = 18 }" }
 
     # ── Keycloak realm seed user (per-env realm) — e2e password-grant fixture.
     "keycloak/fitmate/trainee1/creds" = { username = "trainee1", password = "{ _RANDOM_ = 16 }" }
@@ -195,6 +200,32 @@ locals {
       KEYCLOAK_JWKSURL                    = "http://keycloak-service.keycloak.svc.cluster.local:8080/realms/${local.realm_name}/protocol/openid-connect/certs"
       DATABASE_WRITE_DB_CONNECTION_STRING = "postgresql://inquiry_app_${local.environment}:{{database/inquiry/app/creds:password}}@192.168.105.10:5432/inquiry_${local.environment}?sslmode=disable"
       DATABASE_READ_DB_CONNECTION_STRING  = "postgresql://inquiry_ro_${local.environment}:{{database/inquiry/ro/creds:password}}@192.168.105.10:5432/inquiry_${local.environment}?sslmode=disable"
+    }
+
+    # ── notification-service (SCRUM-427, spec 077) ──────────────────────────────────────────────
+    #
+    # FIRST Python service to reach the cluster, so two things differ from the Go entries above
+    # even though the KEY NAMES are identical (config/config.py deliberately reuses the Go names):
+    #
+    #   * The DSNs are consumed by **asyncpg**, not database/sql. `sslmode=disable` is kept because
+    #     asyncpg accepts libpq-style `sslmode` in the URL and the PG server is plaintext on the lab
+    #     LAN — same posture as every service above. Do NOT "upgrade" this to `ssl=disable`
+    #     (asyncpg's native kwarg spelling): the value travels as a URL, and libpq spelling is what
+    #     the other five use.
+    #   * KEYCLOAK_JWKSURL stays the in-cluster Service URL while KEYCLOAK_ISSUER is the PUBLIC
+    #     host, for the reason stated at local.issuer_host: the issuer is COMPARED byte-for-byte
+    #     against the `iss` claim, the JWKS is merely FETCHED. Pods cannot resolve auth-dev.
+    #     The Python toolkit verifies the same way the Go verifier does, so this asymmetry is
+    #     required here too — do not make these consistent.
+    #
+    # Deterministic: static strings + {{...:password}} composition tokens over creds declared
+    # above. No _RANDOM_ here, so applying this re-rolls nothing.
+    "notification/params" = {
+      KEYCLOAK_ISSUER                     = "${local.issuer_host}/realms/${local.realm_name}"
+      KEYCLOAK_AUDIENCE                   = "fitmate-backend"
+      KEYCLOAK_JWKSURL                    = "http://keycloak-service.keycloak.svc.cluster.local:8080/realms/${local.realm_name}/protocol/openid-connect/certs"
+      DATABASE_WRITE_DB_CONNECTION_STRING = "postgresql://notification_app_${local.environment}:{{database/notification/app/creds:password}}@192.168.105.10:5432/notification_${local.environment}?sslmode=disable"
+      DATABASE_READ_DB_CONNECTION_STRING  = "postgresql://notification_ro_${local.environment}:{{database/notification/ro/creds:password}}@192.168.105.10:5432/notification_${local.environment}?sslmode=disable"
     }
 
     # admin also carries KEYCLOAK_CLIENTSECRET, delivered from the SEPARATE doc dev/admin/keycloak/creds
