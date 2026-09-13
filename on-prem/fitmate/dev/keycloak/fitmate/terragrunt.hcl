@@ -50,7 +50,10 @@ dependency "vault-secrets" {
   config_path = "../../vault-secrets"
   mock_outputs = {
     secrets = {
-      "keycloak/fitmate/trainee1/creds" = { username = "trainee1", password = "MOCK" }
+      # SCRUM-458: mirror the REAL identifier. This realm has registration_email_as_username = true,
+      # so the seeded username is the email; a mock carrying the bare name is a stale shape a reader
+      # will copy. Terraform never reads this key (only ["password"]) — the fidelity is the point.
+      "keycloak/fitmate/trainee1/creds" = { username = "trainee1@fitmate.local", password = "MOCK" }
       "keycloak/fitmate/admin1/creds"   = { username = "admin1@fitmate.local", password = "MOCK" }
     }
   }

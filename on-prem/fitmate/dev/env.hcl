@@ -128,18 +128,37 @@ locals {
     "database/notification/ro/creds"  = { username = "notification_ro_${local.environment}", password = "{ _RANDOM_ = 18 }" }
 
     # ── Keycloak realm seed user (per-env realm) — e2e password-grant fixture.
-    "keycloak/fitmate/trainee1/creds" = { username = "trainee1", password = "{ _RANDOM_ = 16 }" }
+    #
+    # 🔴 SCRUM-458. `username` must be the identifier THIS realm accepts at the token endpoint, not
+    # the map key. dev sets registration_email_as_username = true (dev/keycloak/fitmate/terragrunt.hcl
+    # :137), so Keycloak rewrote the seeded user's username to its email and the bare name stopped
+    # resolving: an Admin-API exact lookup of `trainee1` returns 0 users, `trainee1@fitmate.local`
+    # returns 1 (measured 2026-09-13). A consumer that reads this path and posts the value as
+    # `username` gets `invalid_grant / "Invalid user credentials"` — byte-identical to the error for a
+    # wrong password, because Keycloak collapses every direct-grant failure into one generic response.
+    # That indistinguishability is the whole cost of this line: SCRUM-458 spent a day proving the
+    # password was right when the user simply was not being found.
+    #
+    # ⚠️ Do NOT "align" stg/prod to match this. Those realms set neither registration_email_as_username
+    # nor login_with_email_allowed (measured 2026-09-13 against live fitmate-stg: both false, and a
+    # bare `trainee1` resolves there). The bare name is CORRECT in those files; copying this edit
+    # across would break them the same way dev was broken. The right value is per-realm, not global.
+    #
+    # Editing this value is re-roll-safe: random_password.secrets in shared/vault-secrets is
+    # for_each-keyed by "${path}_${key}", so changing the `username` VALUE leaves the password
+    # resource's address untouched. Verified before this edit: nothing composes `:username` into a
+    # DSN template, and the keycloak unit reads only ["password"] from this path.
+    "keycloak/fitmate/trainee1/creds" = { username = "trainee1@fitmate.local", password = "{ _RANDOM_ = 16 }" }
 
     # ── Keycloak admin-panel seed user (SCRUM-323) — BROWSER sign-in fixture for admin-dev.
     # Separate Vault path from trainee1 because vault_kv_secret_v2 manages a path's WHOLE data map:
     # a second key written into trainee1/creds would clobber it on every apply.
     #
-    # ⚠️ The `username` field here is STORAGE METADATA, not the login identifier. Nothing reads it —
-    # the keycloak unit consumes only ["password"] — and the realm has registration_email_as_username
-    # on, so the identifier Dao types is the EMAIL. It is written as the email anyway so that a reader
-    # of the Vault path is not told a name that would be rejected at the login form (trainee1's entry
-    # predates ADR-050 and still carries the bare name; left alone here to avoid a no-op diff on the
-    # e2e fixture).
+    # ⚠️ The `username` field is storage metadata as far as TERRAFORM is concerned — the keycloak unit
+    # consumes only ["password"]. It is NOT unread: humans and e2e fixtures read this Vault path to
+    # log in, which is exactly how SCRUM-458 happened. This comment previously argued the trainee1
+    # entry could keep its stale bare name because "nothing reads it"; a reader read it. Write the
+    # identifier the realm accepts (the email here, per ADR-050), never the map key.
     "keycloak/fitmate/admin1/creds" = { username = "admin1@fitmate.local", password = "{ _RANDOM_ = 16 }" }
 
     # ── Per-service Keycloak token-validation config (NON-secret; issuer/audience/JWKS). ESO syncs
