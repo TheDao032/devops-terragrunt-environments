@@ -136,17 +136,72 @@ inputs = {
     # on merge. This commit is the rescue. See the note in 50-conversations for the full trace.
     registration_email_as_username = true
 
-    # 🔴 reset_password_allowed and verify_email are deliberately LEFT OFF — they are blocked on
-    # SMTP, not on a decision. Verified 2026-08-24: this realm's `smtpServer` is `{}` and the shared
-    # module configures no smtp_server block anywhere.
-    #   • reset_password_allowed → renders "Forgot password?" leading to a form that can never
-    #     deliver a reset mail. The V3 `/login/help` screen assumes this works; enabling it now
-    #     would make the screen reachable and non-functional, which is worse than absent.
+    # ── DEV MAIL PATH — mailpit catcher (ADR-094; SCRUM-450, unblocks SCRUM-453 on dev) ─────────
+    # 🟡 CORRECTED 2026-09-13. The block below used to read "the shared module configures no
+    # smtp_server block anywhere." That was true when written and is now false — the module grew a
+    # `dynamic "smtp_server"` block, and this unit is the FIRST and ONLY consumer of it.
+    #
+    # The target is mailpit, an in-cluster mail CATCHER: it speaks SMTP, accepts everything, stores
+    # it, and forwards NOTHING. Reachable from this cluster only (ClusterIP). UI for QA:
+    #   http://mailpit.k3s.fitmate
+    #
+    # 🔴 WHAT THIS PROVES: that Keycloak actually opened an SMTP conversation, and what the message
+    # body contains. That is MORE than a real relay tells you, because a relay hands back a receipt
+    # you cannot open.
+    # 🔴 WHAT IT DOES NOT PROVE: deliverability to a human. No SPF, no DKIM, no spam classification,
+    # no bounce handling. A green dev email test is NOT evidence that FitMate can send mail. Do not
+    # cite it as such on any ticket.
+    #
+    # 🔴 DEV ONLY — this block must NOT be copied to stg or prod. Pointing a real realm at a catcher
+    # makes password-reset mail vanish into a lab UI while the realm reports success: the exact
+    # "we sent it" lie ADR-094 exists to prevent. stg/prod get a real relay and a real sending
+    # domain (SCRUM-451: fitmate.me currently has NO TXT records at all, so SPF starts from zero).
+    #
+    # NO `auth` BLOCK — deliberate, and verified against the provider schema rather than assumed.
+    # In keycloak/keycloak v5.9.0 `auth` is a nested BLOCK (max 1) whose `username` and `password`
+    # are BOTH Required; there is no `auth = false` attribute, so writing one is a type error.
+    # Omitting the block makes the provider send `Auth = false`, which is what a credential-less
+    # catcher needs. No dummy credential pair is required. (Provider source: `if len(authConfig)
+    # == 1 { smtpServer.Auth = true } else { smtpServer.Auth = false }`.)
+    #
+    # starttls/ssl both false: mailpit's :1025 listener is plaintext. Safe ONLY because the hop is
+    # pod→pod inside one cluster and the peer forwards nothing. The shared module REFUSES plaintext
+    # on any port other than 1025 (validation in variables.tf), so this cannot be retargeted at a
+    # real relay without also turning TLS on.
+    smtp_server = {
+      host = "mailpit.mailpit.svc.cluster.local"
+      port = "1025" # string, not number — the provider's schema types it as a string
+
+      # The catcher accepts any address, including reserved TLDs. Keycloak's OWN validator does
+      # not: it rejects `.test` / `.local` / `.invalid` / `.example` BEFORE any send is attempted.
+      # So the From must be a real-shaped domain even though nothing leaves the cluster.
+      from              = "noreply@fitmate.me"
+      from_display_name = "FitMate (dev)"
+      reply_to          = "noreply@fitmate.me"
+      allow_utf8        = true # Vietnamese display names and subjects
+    }
+
+    # 🔴 reset_password_allowed and verify_email are STILL deliberately LEFT OFF — this change does
+    # not flip them. Configuring an SMTP target is not the same as observing a message arrive.
+    # The ordering is: (1) mailpit is running, (2) this smtp_server points at it — THIS CHANGE —
+    # then (3) a real password-reset mail is observed captured AND rendering correctly in the
+    # mailpit UI (vi/en copy, working CTA link), and only THEN (4) the two flags flip, separately.
+    #
+    # Skipping (3) is exactly the failure mode already documented for the login theme below:
+    # Keycloak does not validate that mail can be sent, so a wrong host, a wrong port, or a
+    # NetworkPolicy in the way all produce a GREEN apply and a silent send failure at runtime.
+    #   • reset_password_allowed → renders "Forgot password?" leading to a form that must actually
+    #     deliver. The V3 `/login/help` screen assumes it works; enabling it before (3) would make
+    #     the screen reachable and non-functional, which is worse than absent.
     #   • verify_email → hands every new registrant a VERIFY_EMAIL action satisfied only by an
-    #     email that never arrives, locking them out of the account they just created. With
-    #     registration now ON, enabling this without SMTP would break sign-up entirely.
-    # Both become one-line changes once a mail server exists. Until then, note the accepted
-    # consequence of registration-without-verification below.
+    #     email that must actually arrive. With registration ON, enabling this before (3) would
+    #     break sign-up entirely.
+    #
+    # ⚠️ SEPARATE BLOCKER FOR THE SEEDED USERS, not fixed by mailpit: the seeded accounts are
+    # trainee1@fitmate.local / admin1@fitmate.local, and `.local` is an IANA special-use TLD that
+    # Keycloak's own validator rejects before any send. Those two accounts cannot receive a
+    # verify-email or reset mail even once step (3) passes — in dev OR prod. Re-point the seeds to
+    # a real-shaped domain (e.g. @fitmate.me) as part of step (4).
     #
     # ⚠️ ACCEPTED FOR DEV, NOT FOR PROD: open registration + no email verification means anyone can
     # create an account claiming ANY address, unverified. Contained here because this is a lab realm
