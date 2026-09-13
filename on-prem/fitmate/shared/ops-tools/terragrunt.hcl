@@ -555,7 +555,7 @@ inputs = {
       # trainer + stg queued). Prometheus OOMKilled mid-compaction replays the WAL on restart, so
       # the failure is slow AND lossy — not worth running near the ceiling to save memory that
       # limits never reserve anyway. retention_size 16GB is what actually protects the node disk.
-      memory_limit   = "2Gi"
+      memory_limit = "2Gi"
     }
 
     # Admin password from Vault platform/grafana/creds. The chart default is the well-known literal
@@ -598,13 +598,13 @@ inputs = {
       # 192Mi -> 256Mi: matches measured idle. Requests DO reserve, so this one is a real cost.
       memory_request = "256Mi"
       # 1000m -> 2000m: free headroom (limits reserve nothing) and the throttle fraction was 1.0.
-      cpu_limit      = "2000m"
+      cpu_limit = "2000m"
       # 384Mi -> 1Gi. NOTE the true peak is UNKNOWN: 380Mi was measured against a 384Mi cap, so it
       # is a floor, not a peak. 1Gi is chosen to be comfortably past the ceiling rather than tuned.
       # ⚠️ AFTER APPLYING, RE-MEASURE. Success = throttle fraction well BELOW 1.0 and memory that
       # settles somewhere under the new cap. If it simply re-pegs at 2000m/1Gi, that is a DIFFERENT
       # bug — go read Grafana 13.2 unified-storage issues, do not raise these numbers a third time.
-      memory_limit   = "1Gi"
+      memory_limit = "1Gi"
     }
 
     # Rules evaluate from day one; DELIVERY (Telegram/Slack) is wired LAST, deliberately. An
@@ -693,6 +693,96 @@ inputs = {
           path_prefix       = "/"
           backend_name      = "kube-prometheus-stack-alertmanager"
           backend_port      = 9093
+        }
+      ]
+    }
+  }
+
+  # ════════════════════════════════════════════════════════════════════════════════════════════
+  # mailpit — the DEV MAIL CATCHER (ADR-094; closes SCRUM-450, unblocks SCRUM-453 on dev)
+  #
+  # Dev could not deliver mail at all: notification-service pointed at smtp.gmail.com with empty
+  # credentials, and the Keycloak realm had `smtpServer: {}`. Both SMTP clients live in THIS
+  # cluster (keycloak-service in ns keycloak, notification-service in ns
+  # fitmate-notification-dev), so one catcher Service serves both.
+  #
+  # 🔴 WHAT THIS PROVES: that an SMTP conversation happened and that the message body renders —
+  # vi/en copy, CTA URL, masked recipient. That is MORE than a real relay gives, because a relay
+  # returns a receipt you cannot open.
+  # 🔴 WHAT IT DOES NOT PROVE: deliverability to a human. No SPF/DKIM alignment, no spam
+  # classification, no bounce handling, no rate limits. A green dev email E2E is NOT evidence
+  # that FitMate can send mail, and must never be reported as such.
+  #
+  # 🔴 DEV ONLY. This stack lives in the SHARED ops-tools unit because that is the only place
+  # ops-tools exists (there is no per-env variant) — the lab cluster IS the dev environment.
+  # "Dev only" is therefore enforced at the WIRING, not here:
+  #   • Keycloak: smtp_server set ONLY on on-prem/fitmate/dev/keycloak/fitmate
+  #   • notification-service: config/dev/config.yaml ONLY
+  # If this address ever appears in a stg or prod config, that is the bug — it would mean
+  # password-reset mail silently vanishing into a lab UI while the realm reports success.
+  #
+  # IN-CLUSTER SMTP ADDRESS FOR BOTH CLIENTS:  mailpit.mailpit.svc.cluster.local:1025
+  # UI (LAN only):                             http://mailpit.k3s.${local.cluster_suffix}
+  # ════════════════════════════════════════════════════════════════════════════════════════════
+  mailpit_conf = {
+    mailpit = {
+      namespace = "mailpit"
+
+      # Pinned by tag, never `latest`. v1.31.1's manifest list carries linux/arm64, which this
+      # lab requires (Apple Silicon host → arm64 VMs). Re-check the arch list on every bump.
+      image = "axllent/mailpit:v1.31.1"
+
+      # ── Retention (ADR-094 requires it bounded) ───────────────────────────────────────────
+      # Three bounds, because each alone has a hole: count ignores bytes, age ignores bursts,
+      # and only the volume limit is enforced by anything. Note this is an emptyDir and NOT a
+      # PVC on purpose — local-path bind-mounts a node directory and does NOT enforce
+      # requests.storage, so a PVC size here would be documentation, exactly like the
+      # storage_size/retention_size split already documented for Prometheus above.
+      max_messages = 500
+      max_age      = "72h"
+      # ⚠️ MEGABYTES, NOT BYTES. Upstream: "Maximum size in MB", default 50. A byte count here
+      # is read as terabytes and silently removes the limit while everything still looks green.
+      max_message_size = "10"
+      storage_size     = "512Mi"
+
+      # ⚠️ UNMEASURED. Sized from what mailpit is (one static Go binary + a small SQLite file),
+      # not from observation in this cluster. Stated plainly because the Grafana numbers above
+      # were once justified by a confident figure that turned out to be a fresh-pod reading.
+      # Re-measure from the pod's own metrics once this has held mail for a week.
+      # Requests are what the scheduler reserves on 3 agents at 2 vCPU / 2962Mi and are the real
+      # cost; the CPU limit is burst headroom, the memory limit is the discipline.
+      cpu_request    = "10m"
+      memory_request = "48Mi"
+      cpu_limit      = "500m"
+      memory_limit   = "256Mi"
+    }
+
+    routing = {
+      httproutes = [
+        {
+          # 🔴 NO AUTHENTICATION, and the contents are more sensitive than Grafana's or
+          # Prometheus's: a mail catcher holds password-reset and email-verification links,
+          # which ARE bearer credentials. Anyone who can load this page can take over any dev
+          # account that has requested a reset.
+          #
+          # Acceptable ONLY because this is a lab-internal `.k3s.<suffix>` name on the `web`
+          # listener, reachable from the LAN and not published through Cloudflare — the same
+          # posture already accepted for prometheus/alertmanager above, but with a shorter fuse.
+          # DO NOT attach this to a public hostname, to `websecure` for external use, or to the
+          # Cloudflare tunnel without Cloudflare Access (or equivalent) in front.
+          # Upgrade path if that changes: mailpit's MP_UI_AUTH_FILE (htpasswd), which leaves
+          # /livez and /readyz unauthenticated, so the probes keep working.
+          name              = "mailpit"
+          namespace         = "mailpit"
+          gateway_name      = "traefik-gateway"
+          gateway_namespace = "traefik"
+          section_name      = "web"
+          hostnames         = ["mailpit.k3s.${local.cluster_suffix}"]
+          path_prefix       = "/"
+          backend_name      = "mailpit"
+          # UI/API port. The SMTP port (1025) is deliberately NOT routed — it stays ClusterIP,
+          # or the LAN gets an open, unauthenticated relay-shaped endpoint.
+          backend_port = 8025
         }
       ]
     }
