@@ -239,6 +239,17 @@ locals {
     #
     # Deterministic: static strings + {{...:password}} composition tokens over creds declared
     # above. No _RANDOM_ here, so applying this re-rolls nothing.
+    # media-service (spec 086). NO DATABASE keys: this service has none — grep for
+    # asyncpg/DATABASE_ in fitmate-media-service returns nothing. Wiring a connection
+    # string it never reads would invent a dependency and a failure mode.
+    #
+    # Same ISSUER/JWKS asymmetry as notification above, for the same reason.
+    "media/params" = {
+      KEYCLOAK_ISSUER   = "${local.issuer_host}/realms/${local.realm_name}"
+      KEYCLOAK_AUDIENCE = "fitmate-backend"
+      KEYCLOAK_JWKSURL  = "http://keycloak-service.keycloak.svc.cluster.local:8080/realms/${local.realm_name}/protocol/openid-connect/certs"
+    }
+
     "notification/params" = {
       KEYCLOAK_ISSUER                     = "${local.issuer_host}/realms/${local.realm_name}"
       KEYCLOAK_AUDIENCE                   = "fitmate-backend"
