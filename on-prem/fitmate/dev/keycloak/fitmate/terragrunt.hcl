@@ -29,6 +29,32 @@ locals {
       # Same aud as every other client — Keycloak's default is `account`, which every FitMate
       # service rejects. Without this the harness would fail on audience and mask an issuer bug.
       audiences = ["fitmate-backend"]
+      # ── Caller-identity claim (B-M01) ────────────────────────────────────────────────────────
+      # Copies the `trainer_id` USER ATTRIBUTE into this client's access token.
+      #
+      # WHY: media-service stores identity documents under a `trainer_id` taken from a multipart
+      # FORM FIELD and never compares it to identity.sub, so any authenticated user can write
+      # into another trainer's document directory. The same mismatch locks legitimate owners OUT
+      # of their own documents, because the read route compares identity.sub against a path
+      # segment that actually holds the trainers ROW id (d98077d6-… vs sub 6d7c8b39-…) — a
+      # comparison that can never be true, leaving only the admin branch working.
+      #
+      # A signed claim removes the forgeable input entirely.
+      #
+      # ⚠️ The claim is only as trustworthy as the attribute behind it. `trainer_id` MUST be
+      # written by trainer-service using its own admin credentials (fitmate-trainer-backend,
+      # manage-users) and NEVER by the end user — otherwise this relocates the forgery rather
+      # than removing it.
+      #
+      # ⚠️ Until every existing trainer is back-filled, tokens for older accounts carry NO
+      # claim. media-service must treat an absent claim as a REFUSAL, never as a reason to fall
+      # back to the form field — a fallback silently restores the vulnerability this closes.
+      user_attribute_claims = [
+        {
+          user_attribute = "trainer_id"
+          claim_name     = "trainer_id"
+        },
+      ]
     },
   ]
 }
@@ -344,6 +370,32 @@ inputs = {
         ]
         # CRITICAL: backend services require aud contains fitmate-backend (Keycloak default aud = account).
         audiences = ["fitmate-backend"]
+        # ── Caller-identity claim (B-M01) ────────────────────────────────────────────────────────
+        # Copies the `trainer_id` USER ATTRIBUTE into this client's access token.
+        #
+        # WHY: media-service stores identity documents under a `trainer_id` taken from a multipart
+        # FORM FIELD and never compares it to identity.sub, so any authenticated user can write
+        # into another trainer's document directory. The same mismatch locks legitimate owners OUT
+        # of their own documents, because the read route compares identity.sub against a path
+        # segment that actually holds the trainers ROW id (d98077d6-… vs sub 6d7c8b39-…) — a
+        # comparison that can never be true, leaving only the admin branch working.
+        #
+        # A signed claim removes the forgeable input entirely.
+        #
+        # ⚠️ The claim is only as trustworthy as the attribute behind it. `trainer_id` MUST be
+        # written by trainer-service using its own admin credentials (fitmate-trainer-backend,
+        # manage-users) and NEVER by the end user — otherwise this relocates the forgery rather
+        # than removing it.
+        #
+        # ⚠️ Until every existing trainer is back-filled, tokens for older accounts carry NO
+        # claim. media-service must treat an absent claim as a REFUSAL, never as a reason to fall
+        # back to the form field — a fallback silently restores the vulnerability this closes.
+        user_attribute_claims = [
+          {
+            user_attribute = "trainer_id"
+            claim_name     = "trainer_id"
+          },
+        ]
       },
       {
         # ── admin-service backend (B-047 / Keycloak cutover) ──────────────────────────────────
@@ -517,6 +569,46 @@ inputs = {
         # Its own tokens must carry aud=fitmate-backend like every other client (KC default is `account`).
         audiences = ["fitmate-backend"]
       },
+      {
+        # ── trainer-service backend (IN-34) ───────────────────────────────────────────────────
+        # A MACHINE identity, not a browser client. At trainer-profile-creation time
+        # trainer-service calls the Keycloak ADMIN REST API as itself (client_credentials) to map
+        # the `trainer` realm role onto the user who just self-registered. No user logs in through
+        # it, hence standard_flow/direct_grants OFF; service_accounts ON is THE machine identity.
+        #
+        # This mirrors fitmate-trainee-backend above (spec 074 / SCRUM-348) exactly, and is
+        # deliberately a SEPARATE client rather than a reuse of it — same two reasons:
+        #   1. BLAST RADIUS / AUDIT. A leaked trainer secret buys only "assign trainer role", and
+        #      "which service assigned this role" stays answerable.
+        #   2. LIFECYCLE. trainer-service and trainee-service rotate/rollback independently.
+        #
+        # WHY THIS EXISTS: without it a self-registered trainer receives no `trainer` realm role,
+        # so the website's userTypeFromRoles() (identity.ts:211) resolves them to `trainee` and
+        # renders "Học viên" plus trainee routing for a real trainer. MEASURED 2026-09-23: a user
+        # whose GET /trainers/me returned a real id carried roles
+        # ["default-roles-fitmate-dev","offline_access","uma_authorization"] — no `trainer`.
+        client_id                    = "fitmate-trainer-backend"
+        name                         = "FITMate Trainer Service (backend)"
+        access_type                  = "CONFIDENTIAL" # issues the client_secret pushed to Vault below
+        standard_flow_enabled        = false          # never used in a browser
+        direct_access_grants_enabled = false          # no password grant
+        service_accounts_enabled     = true           # THE machine identity
+        # ── Least privilege: identical grant to trainee-backend ───────────────────────────────
+        # 🔴 `view-realm` IS REQUIRED TO ASSIGN A REALM ROLE — do not "tidy" it away as unused.
+        # Keycloak's role-mapping API takes the role's **id**, not its name, so assigning `trainer`
+        # begins with GET /admin/realms/{realm}/roles/trainer to resolve the id. That GET is gated
+        # by `view-realm`; manage-users alone authorises the role-mapping POST that FOLLOWS but NOT
+        # the lookup before it. MEASURED 2026-09-01 on this realm (admin-backend trap #3): a token
+        # with [manage-users view-users] got 403 on GET /roles/{name}; view-realm moved it to 200.
+        #
+        # `view-users` is intentionally OMITTED. trainer-service operates on the user it already
+        # knows — the authenticated caller's `sub` from the request JWT — so it never lists or
+        # searches the user directory. The Go side MUST operate by `sub` and MUST NOT call
+        # GET /users?search=… , which needs view-users/query-users and would 403.
+        service_account_roles = ["manage-users", "view-realm"]
+        # Its own tokens must carry aud=fitmate-backend like every other client (KC default is `account`).
+        audiences = ["fitmate-backend"]
+      },
     ], local.e2e_clients)
 
     # e2e test user. firstName/lastName/email/email_verified are REQUIRED for a password-grant
@@ -686,6 +778,14 @@ inputs = {
       # ESO needs NO policy change: fitmate-trainee-<env>-eso reads fitmate/data/<env>/trainee/*
       # and a Vault trailing `*` spans `/` (same property relied on for admin/keycloak/creds).
       "fitmate-trainee-backend" = { path = "${local.environment}/trainee/keycloak/creds", key = "KEYCLOAK_CLIENTSECRET" }
+      # trainer-service's Admin-API client secret (IN-34) → ESO → the fitmate-trainer-<env>
+      # namespace. Its OWN path (not trainer/params): vault_kv_secret_v2 manages a path's WHOLE
+      # data map, so writing into trainer/params would clobber KEYCLOAK_ISSUER / KEYCLOAK_JWKSURL
+      # / the DB DSNs already there on every apply.
+      # ESO needs NO policy change: fitmate-trainer-<env>-eso already reads
+      # fitmate/data/<env>/trainer/* and a Vault trailing `*` spans `/` (verified 2026-09-23:
+      # `trainer` is already an eso_service_sa entry in <env>/vault-auths/terragrunt.hcl).
+      "fitmate-trainer-backend" = { path = "${local.environment}/trainer/keycloak/creds", key = "KEYCLOAK_CLIENTSECRET" }
       # ADR-066 BFF client secret → ESO → the fitmate-admin-<env> namespace, alongside the
       # Admin-API secret above. Its OWN path for the same reason that one has one:
       # vault_kv_secret_v2 manages a path's WHOLE data map, so writing a second key into
