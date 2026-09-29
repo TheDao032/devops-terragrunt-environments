@@ -303,6 +303,22 @@ inputs = {
     # must gate on `administrator` in realm_access.roles. (keycloak/keycloak#43579, #44371)
     roles = ["trainee", "trainer", "administrator", "super_admin"]
 
+    # ── Custom user-profile attributes (B-M01) ────────────────────────────────────────────────
+    # `trainer_id` must be DECLARED or Keycloak 26 silently discards it: the admin PUT returns
+    # 204 and the value never lands, so the protocol mapper has nothing to copy and no token
+    # ever carries the claim. Measured against live dev 2026-09-29.
+    #
+    # edit is ADMIN-ONLY (the module default). The whole point of B-M01 is that media-service
+    # stops trusting a client-supplied trainer id; letting the user edit the attribute would
+    # move the forgery into Keycloak rather than remove it. Only trainer-service writes it,
+    # using fitmate-trainer-backend's manage-users grant.
+    user_profile_attributes = [
+      {
+        name         = "trainer_id"
+        display_name = "Trainer ID"
+      },
+    ]
+
     clients = concat([
       {
         client_id                    = "fitmate-website"
