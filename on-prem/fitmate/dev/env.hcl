@@ -248,6 +248,20 @@ locals {
       KEYCLOAK_ISSUER   = "${local.issuer_host}/realms/${local.realm_name}"
       KEYCLOAK_AUDIENCE = "fitmate-backend"
       KEYCLOAK_JWKSURL  = "http://keycloak-service.keycloak.svc.cluster.local:8080/realms/${local.realm_name}/protocol/openid-connect/certs"
+
+      # Spec 088 / ADR-108 D-2 — gates media-service's /internal/v1 certification read, which
+      # serves trainer IDENTITY DOCUMENTS to a reviewing admin via admin-service.
+      #
+      # Declared HERE and referenced from admin/params by `{{media/params:INTERNAL_MEDIASHAREDSECRET}}`
+      # so ONE generated value reaches both sides. Declaring it twice would generate two different
+      # random values and every document read would 404 — with nothing in either service looking
+      # misconfigured.
+      #
+      # 44 chars ≈ 33 bytes of entropy (base64-ish alphabet), clearing the ≥32-byte floor that
+      # spec 088's analyze gate (finding C1) set. This secret IS the authorisation boundary:
+      # media-service compares it in constant time and answers 404 on mismatch, so a weak value
+      # is not a hardening gap, it is the whole gate.
+      INTERNAL_MEDIASHAREDSECRET = "{ _RANDOM_ = 44 }"
     }
 
     "notification/params" = {
@@ -268,6 +282,16 @@ locals {
       KEYCLOAK_JWKSURL                    = "http://keycloak-service.keycloak.svc.cluster.local:8080/realms/${local.realm_name}/protocol/openid-connect/certs"
       DATABASE_WRITE_DB_CONNECTION_STRING = "postgresql://admin_app_${local.environment}:{{database/admin/app/creds:password}}@192.168.105.10:5432/admin_${local.environment}?sslmode=disable"
       DATABASE_READ_DB_CONNECTION_STRING  = "postgresql://admin_ro_${local.environment}:{{database/admin/ro/creds:password}}@192.168.105.10:5432/admin_${local.environment}?sslmode=disable"
+
+      # Spec 088 / ADR-108 D-2 — admin-service presents this when fetching a document from
+      # media-service's /internal/v1 read. COMPOSED from media/params, never re-declared: a second
+      # `_RANDOM_` here would generate a DIFFERENT value and silently break every document read.
+      INTERNAL_MEDIASHAREDSECRET = "{{media/params:INTERNAL_MEDIASHAREDSECRET}}"
+
+      # Spec 088 — media-service's HTTP address. Port 3002 was MEASURED on the live service
+      # (`svc media-service: http=3002->http`); it is NOT 5000. trainer/booking/inquiry use 5000
+      # and copying that number here would make every document read fail against a closed port.
+      SERVICES_MEDIASERVICEURL = "http://media-service.fitmate-media-${local.environment}:3002"
     }
 
     # ── admin-service bootstrap super_admin password (SCRUM-323, ADR-072) ───────────────────────
