@@ -124,6 +124,30 @@ locals {
     #    each <svc>/params into a <svc>-keycloak Secret the service reads. ISSUER = the browser-facing
     #    host (must equal token `iss`); JWKSURL = the in-cluster Service (pods can't resolve the host).
     #    Realm is per-env (local.realm_name). MVP: only trainee migrated; fan out per service in Phase 2.
+    # media-service (spec 086, ADR-110 / IN-48). Mirrors dev/env.hcl:242-266.
+    #
+    # NO DATABASE keys: this service has none — grep for asyncpg/DATABASE_ in
+    # fitmate-media-service returns nothing. Wiring a connection string it never reads would
+    # invent a dependency and a failure mode.
+    #
+    # ⚠️ INTERNAL_MEDIASHAREDSECRET is declared here with its OWN `_RANDOM_`, which is correct
+    # ONLY because stg has no admin-service yet. dev COMPOSES the admin side from this path
+    # (`admin/params` uses `{{media/params:INTERNAL_MEDIASHAREDSECRET}}`) so one generated value
+    # reaches both. When admin-service joins stg its `admin/params` MUST compose from here the
+    # same way. A second `_RANDOM_` on the admin side would generate a DIFFERENT value and every
+    # document read would 404 with nothing in either service looking misconfigured.
+    #
+    # media-service compares it in constant time and answers 404 on mismatch, so this secret IS
+    # the authorisation boundary for trainer identity documents, not a hardening nicety. 44 chars
+    # clears the >=32-byte floor spec 088's analyze gate set.
+    "media/params" = {
+      KEYCLOAK_ISSUER   = "${local.issuer_host}/realms/${local.realm_name}"
+      KEYCLOAK_AUDIENCE = "fitmate-backend"
+      KEYCLOAK_JWKSURL  = "http://keycloak-service.keycloak.svc.cluster.local:8080/realms/${local.realm_name}/protocol/openid-connect/certs"
+
+      INTERNAL_MEDIASHAREDSECRET = "{ _RANDOM_ = 44 }"
+    }
+
     "trainee/params" = {
       KEYCLOAK_ISSUER   = "${local.issuer_host}/realms/${local.realm_name}"
       KEYCLOAK_AUDIENCE = "fitmate-backend"
