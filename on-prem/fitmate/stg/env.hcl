@@ -148,6 +148,30 @@ locals {
       INTERNAL_MEDIASHAREDSECRET = "{ _RANDOM_ = 44 }"
     }
 
+    # ── trainer-service (IN-35 / IN-48). Mirrors dev/env.hcl:184-190 and stg trainee/params.
+    #
+    # Needed because media-service on stg calls TrainerService.RecordCertification over gRPC:
+    # without trainer-service running on stg, a coach uploading a certificate would have the
+    # bytes stored and the certifications row never written — a document that exists but
+    # cannot be COUNTED, so SubmitMyVerification refuses.
+    #
+    # DB creds (database/trainer/app|ro/creds) are already declared above at lines 109-110 and
+    # the roles trainer_app_stg / trainer_ro_stg plus the trainer_stg database are ALREADY LIVE
+    # on 192.168.105.10 (verified against pg_database and pg_roles, not just terraform state).
+    # The {{...:password}} tokens embed those generated passwords.
+    #
+    # ⚠️ VERIFY BY PAYLOAD, NOT BY SecretSynced. `dataFrom.extract` pulls whatever the path
+    # holds, so an INCOMPLETE path syncs "successfully" — SCRUM-227 left trainee-service with
+    # only the three KEYCLOAK_* keys and no connection string while the ExternalSecret
+    # reported SecretSynced=True throughout. List the key names on the materialised Secret.
+    "trainer/params" = {
+      KEYCLOAK_ISSUER                     = "${local.issuer_host}/realms/${local.realm_name}"
+      KEYCLOAK_AUDIENCE                   = "fitmate-backend"
+      KEYCLOAK_JWKSURL                    = "http://keycloak-service.keycloak.svc.cluster.local:8080/realms/${local.realm_name}/protocol/openid-connect/certs"
+      DATABASE_WRITE_DB_CONNECTION_STRING = "postgresql://trainer_app_${local.environment}:{{database/trainer/app/creds:password}}@192.168.105.10:5432/trainer_${local.environment}?sslmode=disable"
+      DATABASE_READ_DB_CONNECTION_STRING  = "postgresql://trainer_ro_${local.environment}:{{database/trainer/ro/creds:password}}@192.168.105.10:5432/trainer_${local.environment}?sslmode=disable"
+    }
+
     "trainee/params" = {
       KEYCLOAK_ISSUER   = "${local.issuer_host}/realms/${local.realm_name}"
       KEYCLOAK_AUDIENCE = "fitmate-backend"
