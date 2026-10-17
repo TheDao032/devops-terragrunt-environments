@@ -43,17 +43,46 @@ include "root" {
 # correct only when EVERY real call path has an explicit allow. Both failures came from
 # verifying one namespace (media-service) and generalising to eleven others.
 #
-# BEFORE THIS IS RE-ENABLED, the service-to-service call graph must be MEASURED — every
-# caller of every service across all namespaces, including the website BFF, which calls them
-# all — and an allow written for each edge. That is its own ticket, not a parameter change.
+# THAT PRECONDITION IS NOW MET FOR STAGING (IN-50, 2026-10-16). The stg call graph was
+# measured from all five sources and every edge validated against the live cluster:
+#
+#   ConfigMaps      8 edges found, 4 of them ASPIRATIONAL and discarded — website-stg
+#                   declares booking/inquiry/notification/payment-stg, none of which exist.
+#   Secrets         0. Verified as a REAL zero, not a broken probe: the identical code finds
+#                   admin-service-secrets/SERVICES_MEDIASERVICEURL on dev, and stg has 10
+#                   secrets across the 4 namespaces.
+#   Baked files     1 — media-stg -> trainer-stg:5001, which appears in NO kubernetes object
+#                   at all (it lives in config/stg/config.yaml inside the image).
+#   ServiceMonitors 0 on stg (dev has 4). The monitoring allow is therefore defensive here.
+#   HTTPRoutes      1 — website-stg only. There is no api-stg host.
+#
+# The 5 surviving edges, and all 5 are already covered by the gitops allow-lists:
+#   trainee-stg -> trainer-stg:5000 · website-stg -> media-stg:3002
+#   website-stg -> trainee-stg:5000 · website-stg -> trainer-stg:5000
+#   media-stg   -> trainer-stg:5001
+#
+# TRIALLED ON THE LIVE CLUSTER BEFORE THIS FILE CHANGED. The identical policy body was
+# applied to all 4 stg namespaces: the 5 measured edges stayed rc=0, the unmeasured
+# trainer-stg -> media-stg stayed rc=4 (proving the policy enforces rather than sitting
+# inert), web-stg.fitmate.me returned 200 three times, and all 4 pods stayed 1/1. The trial
+# policies were then deleted and the change shipped here as code.
 #
 # WHAT STILL PROTECTS media-service: the per-app allow-list in fitmate-gitops
 # (platform/netpol/dev/media-service.yaml) remains in force. trainee->media is BLOCKED while
 # admin and trainer work. That layer never caused an outage.
 #
-# An EMPTY list is deliberate and must stay valid: applying it DESTROYS the 12 tracked
-# policies, which is exactly what reconciles state with the rolled-back cluster. Leaving the
-# old list here would make the next apply silently recreate the outage.
+# ROLLBACK: set namespaces = [] and apply. That destroys the 4 policies and returns staging
+# to its pre-IN-50 state. The gitops allow-lists are a separate layer and are untouched by it.
 inputs = {
-  namespaces = []
+  # The 4 fitmate namespaces that exist on staging. Verified against the live cluster:
+  # exact match both ways — nothing on the cluster is missing from this list (which would
+  # leave it unprotected), and nothing here is absent from the cluster (which would fail the
+  # apply). Staging has FOUR services, not dev's ten; copying dev's list would be the exact
+  # generalisation that caused both October outages.
+  namespaces = [
+    "fitmate-media-stg",
+    "fitmate-trainee-stg",
+    "fitmate-trainer-stg",
+    "fitmate-website-stg",
+  ]
 }
