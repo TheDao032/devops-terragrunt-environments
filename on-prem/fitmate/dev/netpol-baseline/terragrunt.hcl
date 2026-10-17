@@ -54,6 +54,57 @@ include "root" {
 # An EMPTY list is deliberate and must stay valid: applying it DESTROYS the 12 tracked
 # policies, which is exactly what reconciles state with the rolled-back cluster. Leaving the
 # old list here would make the next apply silently recreate the outage.
+# ─── IN-47 (2026-10-16): THE PRECONDITION ABOVE IS NOW MET ────────────────────────────
+#
+# The call graph was measured from FIVE sources, not one, because three of them are
+# invisible to an obvious scan:
+#
+#   ConfigMaps      32 edges   (the obvious one)
+#   Secrets          1 edge    admin -> media lives in admin-service-secrets, NOT a ConfigMap
+#   Baked config     2 edges   media -> trainer:5001 is in config/<env>/config.yaml, in NO k8s object
+#   ServiceMonitors  4 edges   prometheus scrape; a deny blanks dashboards with no error anywhere
+#   HTTPRoutes       7 edges
+#                   ─────────
+#                   40 edges, 14 namespaces, every one receiving traffic
+#
+# trainer-dev alone has 11 inbound edges from 8 namespaces. The round-2 rollback happened
+# because the allow-list covered media-dev, which has TWO inbound edges and no public route:
+# the one namespace that could not reveal the bug.
+#
+# Allows are live in fitmate-gitops for all 14 namespaces (PRs #494, #495), and audited
+# 14/14 with ZERO missing measured edges. That audit found a REAL defect: the hand-written
+# media-dev list omitted website-dev, so every file upload on dev was already blocked
+# before any baseline existed (fixed in #496, verified website -> media rc=0 after).
+#
+# 🔴 TRIALLED ON THE CLUSTER BEFORE THIS CHANGE, then removed. Three namespaces chosen to
+# cover all four hazards, because media-dev covers none of them:
+#
+#   fitmate-media-dev           service-to-service only
+#       admin/website/trainer -> media rc=0, trainee rc=4 (still denied), pod 1/1
+#   fitmate-admin-website-dev   HAS a public HTTPRoute  <- the round-1 502 signature
+#       admin-dev.fitmate.me 200, 200, 200 across three consecutive requests
+#   fitmate-booking-dev         ServiceMonitor AND HTTPRoute  <- the full-risk case
+#       prometheus targets up 32 -> 32, booking still scraped, admin -> booking rc=0
+#
+# All three trial policies were deleted afterwards (0 remain; the 14 allow-lists survive).
+#
+# Prometheus was queried via port-forward, NOT from inside its pod: that image is distroless
+# and every in-pod query returned 0 bytes — which reads identically to "no targets".
+#
+# ⚠️ STILL NOT DONE HERE: stg. on-prem/fitmate/stg/netpol-baseline stays parked until the stg
+# call graph is measured the same way. stg has only 4 services and its own topology; copying
+# this list would be exactly the generalisation that caused both outages.
 inputs = {
-  namespaces = []
+  namespaces = [
+    "fitmate-admin-dev",
+    "fitmate-admin-website-dev",
+    "fitmate-booking-dev",
+    "fitmate-inquiry-dev",
+    "fitmate-media-dev",
+    "fitmate-notification-dev",
+    "fitmate-payment-dev",
+    "fitmate-trainee-dev",
+    "fitmate-trainer-dev",
+    "fitmate-website-dev",
+  ]
 }
