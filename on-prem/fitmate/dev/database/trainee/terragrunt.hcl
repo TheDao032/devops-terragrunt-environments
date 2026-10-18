@@ -61,8 +61,8 @@ inputs = {
         pgbouncer = { register = false }
       }
       roles = {
-        "trainee_app_${local.environment}" = { login = true, password = dependency.vault-secrets.outputs.secrets["database/trainee/app/creds"]["password"] }
-        "trainee_ro_${local.environment}"  = { login = true, password = dependency.vault-secrets.outputs.secrets["database/trainee/ro/creds"]["password"] }
+        "trainee_app_${local.environment}" = { login = true, password = dependency.vault-secrets.outputs.secrets["database/trainee/app/creds"]["password"], conn_limit = 12 }
+        "trainee_ro_${local.environment}"  = { login = true, password = dependency.vault-secrets.outputs.secrets["database/trainee/ro/creds"]["password"], conn_limit = 4 }
       }
       grants = [
         # Tables live in `public`, NOT `app`: search_path is "$user", public, so every migration
