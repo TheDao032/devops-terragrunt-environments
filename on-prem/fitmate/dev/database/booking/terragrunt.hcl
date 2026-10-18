@@ -59,8 +59,8 @@ inputs = {
         pgbouncer = { register = false }
       }
       roles = {
-        "booking_app_${local.environment}" = { login = true, password = dependency.vault-secrets.outputs.secrets["database/booking/app/creds"]["password"] }
-        "booking_ro_${local.environment}"  = { login = true, password = dependency.vault-secrets.outputs.secrets["database/booking/ro/creds"]["password"] }
+        "booking_app_${local.environment}" = { login = true, password = dependency.vault-secrets.outputs.secrets["database/booking/app/creds"]["password"], conn_limit = 12 }
+        "booking_ro_${local.environment}"  = { login = true, password = dependency.vault-secrets.outputs.secrets["database/booking/ro/creds"]["password"], conn_limit = 4 }
       }
       grants = [
         # Tables live in `public`, NOT `app`: search_path is "$user", public, so every migration

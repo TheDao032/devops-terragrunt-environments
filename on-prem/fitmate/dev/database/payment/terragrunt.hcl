@@ -61,7 +61,7 @@ inputs = {
         pgbouncer = { register = false }
       }
       roles = {
-        "payment_app_${local.environment}" = { login = true, password = dependency.vault-secrets.outputs.secrets["database/payment/app/creds"]["password"] }
+        "payment_app_${local.environment}" = { login = true, password = dependency.vault-secrets.outputs.secrets["database/payment/app/creds"]["password"], conn_limit = 12 }
       }
       grants = []
     }

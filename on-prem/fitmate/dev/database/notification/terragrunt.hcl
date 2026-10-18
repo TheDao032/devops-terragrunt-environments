@@ -66,8 +66,8 @@ inputs = {
         pgbouncer = { register = false }
       }
       roles = {
-        "notification_app_${local.environment}" = { login = true, password = dependency.vault-secrets.outputs.secrets["database/notification/app/creds"]["password"] }
-        "notification_ro_${local.environment}"  = { login = true, password = dependency.vault-secrets.outputs.secrets["database/notification/ro/creds"]["password"] }
+        "notification_app_${local.environment}" = { login = true, password = dependency.vault-secrets.outputs.secrets["database/notification/app/creds"]["password"], conn_limit = 12 }
+        "notification_ro_${local.environment}"  = { login = true, password = dependency.vault-secrets.outputs.secrets["database/notification/ro/creds"]["password"], conn_limit = 4 }
       }
       grants = [
         # Grants target `public`, NOT `app` — B-323a. search_path is "$user", public, so migrations
