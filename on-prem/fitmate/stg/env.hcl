@@ -192,6 +192,34 @@ locals {
       DATABASE_WRITE_DB_CONNECTION_STRING = "postgresql://trainee_app_${local.environment}:{{database/trainee/app/creds:password}}@192.168.105.10:5432/trainee_${local.environment}?sslmode=disable"
       DATABASE_READ_DB_CONNECTION_STRING  = "postgresql://trainee_ro_${local.environment}:{{database/trainee/ro/creds:password}}@192.168.105.10:5432/trainee_${local.environment}?sslmode=disable"
     }
+
+    # ── payment-service @ stg (spec 093 follow-on; ADR-037/040) ─────────────────────────────
+    #
+    # payment-service has run dev-only. Its stg deliver lane has been FAILING correctly since
+    # v1.0.0 was cut: image and chart push fine, then `promote` stops with
+    #   overlay ".gitops/apps/payment-service/stg/application.yaml" not found
+    # because no stg environment existed. This block is the Vault half of closing that.
+    #
+    # Shape is dev/env.hcl:349-354 verbatim, with every env-specific value coming from
+    # local.environment / local.realm_name / local.issuer_host rather than a literal "stg" —
+    # so the only difference between the two envs is the interpolation, which is what makes a
+    # dev-vs-stg key diff a meaningful check.
+    #
+    # ⚠️ NO NEW CREDENTIAL IS MINTED HERE. The DSN references the password already managed at
+    # database/payment/app/creds (line 118), which the stg/database/payment unit provisions
+    # together with the payment_app_stg role. A second random password here would produce a
+    # Vault path and a Postgres role that disagree, and the failure would surface as an
+    # authentication error at pod start rather than anything resembling its cause.
+    #
+    # ⚠️ VERIFY BY KEY NAMES ON THE MATERIALISED SECRET, not by SecretSynced. See the
+    # trainee/params note above: `dataFrom.extract` syncs an INCOMPLETE path "successfully",
+    # so the condition attests the extract ran, not that these four keys arrived.
+    "payment/params" = {
+      KEYCLOAK_ISSUER                     = "${local.issuer_host}/realms/${local.realm_name}"
+      KEYCLOAK_AUDIENCE                   = "fitmate-backend"
+      KEYCLOAK_JWKSURL                    = "http://keycloak-service.keycloak.svc.cluster.local:8080/realms/${local.realm_name}/protocol/openid-connect/certs"
+      DATABASE_WRITE_DB_CONNECTION_STRING = "postgresql://payment_app_${local.environment}:{{database/payment/app/creds:password}}@192.168.105.10:5432/payment_${local.environment}?sslmode=disable"
+    }
   }
 
   tags = {
