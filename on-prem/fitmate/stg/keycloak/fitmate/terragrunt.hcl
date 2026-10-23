@@ -111,6 +111,40 @@ inputs = {
     display_name = "FITMate"
     ssl_required = "none" # HTTP lab: Keycloak reached at http://keycloak.k3s.fitmate via Traefik
 
+    # ── Branded login theme (spec 067 / SCRUM-245) ────────────────────────────────────────────
+    # stg renders the STOCK Keycloak login page while dev renders the FITMate one, because this
+    # key was simply absent here. Measured 2026-10-23 with the acceptance test dev documents:
+    #   dev -> /resources/<hash>/login/fitmate        stg -> /resources/<hash>/login/keycloak.v2
+    #
+    # ⚠️ A WRONG THEME NAME APPLIES GREEN. Keycloak does not validate the value; it falls back to
+    # the default at RENDER time, so terraform succeeds and the page is unchanged. The only proof
+    # is the resources path above — re-run it after applying, do not trust the apply.
+    #
+    # `fitmate` is the theme's declared NAME in META-INF/keycloak-themes.json, not the JAR filename.
+    # Verified in the RUNNING pod 2026-10-23: /opt/keycloak/providers/fitmate-keycloak-theme.jar is
+    # present on this same shared instance that already serves the dev realm, so no image change is
+    # needed — only this realm setting.
+    #
+    # ⚠️ account_theme / email_theme stay CLASSIC, exactly as in dev: the JAR carries login
+    # templates only, so pointing those here would break the account and email pages.
+    login_theme = "fitmate"
+
+    # ── Internationalization (spec 067) ───────────────────────────────────────────────────────
+    # Vietnamese-first, English secondary — identical to dev. Without this the login page renders
+    # in English and emits NO `#kc-locale` switcher at all: Keycloak only emits that control when
+    # the realm has i18n enabled with >1 supported locale, so no theme can add it back.
+    #
+    # TWO locales, not one, is deliberate: a single-entry list enables i18n and translates the
+    # pages but renders no switcher — indistinguishable from a theme that forgot it.
+    #
+    # ✅ The `vi` bundle ships in THIS cluster's image: dev already renders Vietnamese from the
+    # same shared Keycloak instance, which is the positive control. (Keycloak's vi translations
+    # live in the community overlay that `-DskipCommunityTranslations` builds omit.)
+    internationalization = {
+      supported_locales = ["vi", "en"]
+      default_locale    = "vi"
+    }
+
     # Services gate on realm_access.roles.
     # NOTE: role is "administrator", NOT "admin" — Keycloak 26.4.0+ has an FGAP regression that blocks
     # updating a realm role literally named "admin" (403), even for a super-admin. The FitMate services
