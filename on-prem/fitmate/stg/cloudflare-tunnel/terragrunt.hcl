@@ -92,5 +92,54 @@ inputs = {
   # Adding a route here also creates its proxied CNAME automatically (one per ingress entry).
   routes = [
     { hostname = "auth-stg.fitmate.me", service = "http://traefik.traefik.svc.cluster.local:80" },
+    # ── web-stg (IN-36, 2026-09-25) ───────────────────────────────────────────────────────────────
+    # Added ONLY after the backend existed. Ordering is load-bearing: this entry creates a proxied
+    # CNAME, so adding it first would have made web-stg.fitmate.me resolve and serve a 404 to every
+    # visitor — a hostname that looks provisioned on the board and works for nobody. The note at the
+    # top of this block spells out the same rule: Traefik must ALSO accept the Host or the tunnel
+    # forwards into a 404.
+    #
+    # Verified before adding (gitops PR #401, chart fitmate-website 1.0.0):
+    #   HTTPRoute `website` in ns fitmate-website-stg   hostnames ["web-stg.fitmate.me"]
+    #                                                   Accepted=True  ResolvedRefs=True
+    #   in-cluster curl -H "Host: web-stg.fitmate.me" http://traefik.traefik:80  -> HTTP 200
+    #   negative control, Host bogus.fitmate.me                                  -> HTTP 404
+    # So the 200 proves the route matched rather than a catch-all answering.
+    #
+    # FLAT NAME, like every host here: `web-stg`, never `web.stg`. Universal SSL covers
+    # fitmate.me and *.fitmate.me only — one label — so a dotted name gets no certificate and
+    # fails the TLS handshake outright while DNS, tunnel and connector all look healthy.
+    { hostname = "web-stg.fitmate.me", service = "http://traefik.traefik.svc.cluster.local:80" },
+    # ── api-stg (2026-10-22) — the PUBLIC API SURFACE on stg ──────────────────────────────────────
+    # Mirrors api-dev (ADR-058 / spec 073 FR-026, SCRUM-335): ONE host, PATH-routed —
+    # api-stg.fitmate.me/api/v1/{service}/... — explicitly NOT per-service subdomains.
+    #
+    # WHY IT IS NEEDED NOW: SePay delivers pay-in webhooks by HTTP POST to a public URL. gitops
+    # #541 published Exact /webhooks/sepay/v1 on the stg payment HTTPRoute and wired the stg
+    # SePay credentials, but the hostname did not resolve AT ALL (dig returned nothing), so
+    # SePay had nowhere to deliver to. dev has had this host since 2026-09-03.
+    #
+    # ⚠️ ORDERING RULE (the one web-stg above records): this entry creates a proxied CNAME, so
+    # adding it before a backend accepts the Host would make api-stg.fitmate.me resolve and serve
+    # a 404 to everything — a hostname that looks provisioned and works for nobody.
+    #
+    # VERIFIED BEFORE ADDING, same evidence shape web-stg used (2026-10-22, in-cluster):
+    #   HTTPRoute `payment-service` in ns fitmate-payment-stg  hostnames ["api-stg.fitmate.me"]
+    #                                                          Accepted=True  ResolvedRefs=True
+    #   HTTPRoute `booking-service` in ns fitmate-booking-stg  hostnames ["api-stg.fitmate.me"]
+    #                                                          Accepted=True  ResolvedRefs=True
+    #   curl -H "Host: api-stg.fitmate.me" http://traefik.traefik:80/api/v1/bookings  -> HTTP 401
+    #   negative control, Host bogus.fitmate.me                                       -> HTTP 404
+    #   positive control, Host api-dev.fitmate.me (known-good publicly)               -> HTTP 401
+    # The 401 proves the route MATCHED and auth ran, rather than a catch-all answering. A 200 is
+    # not available here: every path on this host requires a token.
+    #
+    # 🪤 Do NOT probe /api/v1/payments to check this: it is POST-only and returns 404 on DEV too,
+    # which reads exactly like "the Host is not accepted". That false negative cost a detour.
+    #
+    # FLAT NAME: `api-stg`, never `api.stg`. Universal SSL covers fitmate.me and *.fitmate.me only
+    # — one label — so a dotted name gets no certificate and fails the TLS handshake outright while
+    # DNS, tunnel and connector all look healthy.
+    { hostname = "api-stg.fitmate.me", service = "http://traefik.traefik.svc.cluster.local:80" },
   ]
 }
