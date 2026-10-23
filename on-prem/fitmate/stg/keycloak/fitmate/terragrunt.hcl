@@ -149,6 +149,42 @@ inputs = {
     # NOTE: role is "administrator", NOT "admin" — Keycloak 26.4.0+ has an FGAP regression that blocks
     # updating a realm role literally named "admin" (403), even for a super-admin. The FitMate services
     # must gate on `administrator` in realm_access.roles. (keycloak/keycloak#43579, #44371)
+
+    # ── Identity shape: the EMAIL is the identity (owner decision 2026-08-24) ─────────────────
+    # Dao could not sign in to stg with trainee1@fitmate.local / trainer1@fitmate.local while the
+    # SAME accounts worked on dev. Measured 2026-10-23 against the live realms:
+    #
+    #   fitmate-dev  loginWithEmail=true   emailAsUsername=true   registration=true
+    #   fitmate-stg  loginWithEmail=false  emailAsUsername=false  registration=false
+    #
+    # Direct-grant probe, same password from Vault, isolating ONLY the identifier:
+    #   username=trainee1               -> HTTP 200
+    #   username=trainee1@fitmate.local -> HTTP 400
+    #
+    # The credentials were never wrong. stg simply would not accept an email as an identifier,
+    # while the login form — correctly, per the V3 design — asks for one.
+    #
+    # ⚠️ EVERY FLAG IN THE SHARED MODULE DEFAULTS TO false ON PURPOSE (variables.tf:40). stg
+    # inherited those defaults because this block was never written here; dev sets all three
+    # explicitly. An env that silently differs in IDENTITY SHAPE is not a rehearsal for prod.
+    login_with_email_allowed = true
+
+    # D4 — self-service sign-up, matching dev. Keycloak owns the credential step; the website
+    # completes the profile after first sign-in (trainer sign-up needs ID images + certificates,
+    # which Keycloak's registration page cannot collect).
+    registration_allowed = true
+
+    # D4b — the email IS the identity. The V3 auth design was measured to contain ZERO username
+    # fields on any screen, so a separate username input has nowhere to render.
+    #
+    # 🔴 THIS BREAKS PASSWORD GRANT BY BARE USERNAME, exactly as dev documents: with this ON,
+    # `username=trainee1` is rejected and `username=trainee1@fitmate.local` succeeds. Any harness
+    # or script pinned to a bare seeded name must move to the email form. On stg that is the three
+    # QA fixtures (trainee1/trainer1/admin1), whose Vault entries already record both.
+    #
+    # Paired with edit_username_allowed left at its default false — the shared module REFUSES the
+    # combination, because a user who can edit their username can edit away this invariant.
+    registration_email_as_username = true
     roles = ["trainee", "trainer", "administrator", "super_admin"]
 
     # ── Custom user-profile attributes (B-M01) ────────────────────────────────────────────────
