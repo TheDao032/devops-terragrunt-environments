@@ -730,7 +730,26 @@ inputs = {
         client_id      = "290257968475-mp8akbb8dgjkhmgau7bpdcptk74bh84e.apps.googleusercontent.com"
         client_secret  = get_env("GOOGLE_CLIENTSECRET_DEV", "")
         default_scopes = "openid profile email"
-        trust_email    = false
+        # ADR-114 (2026-10-25): Google's email is TRUSTED.
+        #
+        # Dao hit the dead end this fixes by using the product: sign up with email +
+        # password, then sign in with Google on the SAME address. Keycloak offers to link
+        # the accounts, then demands an email challenge — and NO MAIL CAN REACH A HUMAN on
+        # any environment. dev's smtp_server points at mailpit, a CATCHER on an emptyDir
+        # (MP_DATABASE=/data/mailpit.db, 10 restarts); stg has no smtp_server block at all.
+        # The user is stranded mid-link with no way forward.
+        #
+        # Google issues email_verified only for an address the account actually owns, so
+        # re-verifying it ourselves adds a mail dependency to the login path and buys
+        # nothing. The generic warning in variables.tf ("anyone who can create a provider
+        # account bearing a victim's address inherits the FITMate account") is load-bearing
+        # for an IdP with weak email proof — not for Google.
+        #
+        # 🔴 THE CONSENT SCREEN IS NOT SKIPPED. first_broker_login_flow_alias stays the
+        # stock flow, so 'Confirm link existing account' is still REQUIRED: the user clicks
+        # through a screen naming the existing account. Only the unsatisfiable email
+        # challenge is removed. Facebook MUST NOT inherit this — its email proof is weaker.
+        trust_email    = true
         sync_mode      = "IMPORT"
       },
       # ── Facebook: DEFERRED to a post-launch phase (2026-08-23, owner's call) ────────────────────
