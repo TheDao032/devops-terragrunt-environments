@@ -171,7 +171,35 @@ inputs = {
       # ⚠️ VERSION ALIGNMENT: the custom image's Keycloak base MUST match the operator (26.7.0
       # today). The operator and server are upgraded together; a pinned custom image is not, so
       # this becomes a standing rebuild obligation on every Keycloak bump.
-      image = "ghcr.io/fitmate-platform/fitmate-keycloak:dev_35_0d4ba68"
+      # 🔴 TAG HISTORY — this pin is the deploy unit, and it went stale for 32 merges.
+      #
+      # 2026-10-29: dev_35_0d4ba68 -> dev_167_8989510.
+      #
+      # The running server was serving a month-old theme while the website repo had pushed
+      # 32 newer images. Nothing was broken and nothing failed: CI's `keycloak-theme` job was
+      # green, deliver's `keycloak-image / build · push` was green, ArgoCD was Synced —
+      # because ArgoCD does not manage Keycloak at all, and NO JOB ANYWHERE ADVANCES THIS
+      # LINE. The consequence was user-visible: the live auth page told every visitor
+      # "ID checked / Certificate confirmed / Insured" and "102 verified coaches are
+      # waiting" — claims the platform cannot support, which commit 515775f removed from
+      # the source on 2026-09-27 and which kept being served for a month afterwards.
+      #
+      # VERIFIED BEFORE CHANGING (all four, per the instructions above):
+      #   docker manifest inspect ...:dev_167_8989510   -> resolves
+      #   platform                                      -> linux/arm64 (nodes are arm64)
+      #   operator / running server / Dockerfile base   -> 26.7.0 on all three
+      #
+      # 🔑 AND THE PAYLOAD, NOT JUST THE TAG. A tag is a name; bumping to one that does not
+      # fix the copy would be a green deploy over an unchanged lie. The theme JAR was
+      # extracted from BOTH images and grepped:
+      #   dev_167: "Real prices up front" 1 · "Specialties as stated" 1 · "Free to search" 1
+      #            "ID checked" 0 · "Certificate confirmed" 0 · "102 verified" 0
+      #   dev_35 : "ID checked" 1 · "102 verified" 1 · "Real prices up front" 0  <- control
+      #
+      # ⚠️ THIS IS NOT A ONE-CHANGE DEPLOY. It carries a month of accumulated theme work
+      # that has never run anywhere, so verify the FUNNEL (/register -> role tap -> Keycloak
+      # hand-off) after applying, not just the copy.
+      image = "ghcr.io/fitmate-platform/fitmate-keycloak:dev_167_8989510"
       #
       # Only if the GHCR package is PRIVATE. The Secret must already exist in the `keycloak`
       # namespace — nothing here creates it (the existing `ghcr-pull` Secrets live in the
