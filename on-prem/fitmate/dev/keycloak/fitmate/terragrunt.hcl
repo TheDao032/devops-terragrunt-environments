@@ -234,7 +234,10 @@ inputs = {
     #
     # ⚠️ ACCEPTED FOR DEV, NOT FOR PROD: open registration + no email verification means anyone can
     # create an account claiming ANY address, unverified. Contained here because this is a lab realm
-    # and Google remains trust_email = false (so a brokered login cannot silently inherit an account
+    # and FACEBOOK remains trust_email = false (so a brokered login cannot silently inherit an
+    # account by matching an unverified address). ⚠️ This line said GOOGLE until 2026-10-30 — stale
+    # since ADR-114 (2026-10-25) set google trust_email = true. Facebook is now the provider the
+    # sentence is true of.
     # by matching an unverified address). Do NOT copy this pairing into stg/prod — those need SMTP
     # and verify_email first.
 
@@ -700,7 +703,7 @@ inputs = {
     #
     # ⚠️ BEFORE THIS WORKS: the broker callback must be registered at each provider's console —
     #   http://keycloak.k3s.fitmate/realms/fitmate-dev/broker/google/endpoint
-    #   http://keycloak.k3s.fitmate/realms/fitmate-dev/broker/facebook/endpoint
+    #   https://auth-dev.fitmate.me/realms/fitmate-dev/broker/facebook/endpoint
     # Terraform cannot do that. `terragrunt output identity_provider_redirect_uris` prints them.
     #
     # ⚠️ trust_email = false is a SECURITY choice, not a default to inherit. With true, a social
@@ -768,13 +771,45 @@ inputs = {
       #   3. export FACEBOOK_CLIENTSECRET_DEV in .envrc.local
       #   4. restore the block below and apply
       #
-      # {
-      #   alias         = "facebook"
-      #   client_id     = "<FitMate dev test-app App ID>"
-      #   client_secret = get_env("FACEBOOK_CLIENTSECRET_DEV", "")
-      #   trust_email   = false   # ADR 2026-08-21 — do not change without superseding it
-      #   sync_mode     = "IMPORT"
-      # },
+      # ── Facebook: ENABLED 2026-10-30 (ADR-118 step 4). ──────────────────────────────────────────
+      # App `FitMate Dev`, App ID 1744447466628264, created by Dao 2026-10-30. This is a
+      # STANDALONE app, not a test app under `FitMate Prod` as the old note suggested — Dao
+      # created it before that route was raised, and it works for dev because a Development-mode
+      # app lets users with a role log in without App Review. It will NEVER pass App Review as-is:
+      # Meta lists Privacy Policy URL + Delete user data as missing, and FITMate has neither
+      # (SCRUM-526, SCRUM-528). That is a launch problem, not a dev one.
+      #
+      # Redirect URI registered in the Meta console (verified by Dao 2026-10-30):
+      #   https://auth-dev.fitmate.me/realms/fitmate-dev/broker/facebook/endpoint
+      # Strict mode is ON at Meta, so this must match EXACTLY — https, no trailing slash.
+      {
+        alias         = "facebook"
+        client_id     = "1744447466628264"
+        client_secret = get_env("FACEBOOK_CLIENTSECRET_DEV", "")
+
+        # 🔴 trust_email = false — OPTION A, Dao's decision 2026-10-30, amending ADR-118.
+        #
+        # Google is trust_email = true under ADR-114 because its email_verified claim is
+        # explicit per-address and a real user was stranded without it. NEITHER applies here:
+        # I could not find a primary source establishing how strong Facebook's email claim is,
+        # and no user is currently blocked. Absent proof, the account that holds escrow money
+        # does not get auto-linked on an unverified address.
+        #
+        # ⚠️ WHAT THIS COSTS, measured 2026-10-30. On a COLLISION (the Facebook email already
+        # belongs to a FITMate account) Keycloak emails a verification challenge. dev can
+        # complete it — smtp is mailpit, which TRAPS mail but exposes a UI at
+        # mailpit.k3s.fitmate, so a developer opens the link there. A real end user cannot.
+        # stg has NO smtp_server at all: the challenge is unsendable and the user is stuck.
+        #
+        # Collisions are near-impossible on dev today: 18 of 20 users are fixtures at
+        # @fitmate.local / @fitmate.test, which nobody can own on Facebook.
+        #
+        # 🔴 DO NOT flip this to true to 'fix' a stuck user. The real fix is a working mail
+        # relay (Option C, ticket filed 2026-10-30) — which stg and prod need anyway, since
+        # resetPasswordAllowed is false for exactly the same reason.
+        trust_email    = false
+        sync_mode      = "IMPORT"
+      },
     ]
   }
 
