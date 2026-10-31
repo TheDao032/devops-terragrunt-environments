@@ -153,6 +153,18 @@ inputs = {
     # Keycloak's built-in `browser` flow and needs a flow copy bound via
     # authenticationFlowBindingOverrides — resources the shared module does not yet declare.
     # Tracked separately; see 20-architecture/proposal-adr118-step3-kill-password-doors.md.
+    # ── Where a hint-less sign-in goes (B-FLOW-DEADEND, measured 2026-10-31) ────────────────────
+    #
+    # fitmate-website is bound to the social-only browser flow, which has NO form-rendering
+    # execution. Without this, an arrival carrying no kc_idp_hint — a bookmark, a direct /auth
+    # link, an expired session resuming — fell through every execution and rendered a bare
+    # "Sign-in failed". Verified live: 'Continue with Google' (hinted) worked while
+    # 'Sign in with your FITMate account' (unhinted) did not.
+    #
+    # google, not facebook: google has trust_email = true (ADR-114) and is the provider every
+    # existing social user on this realm already has.
+    social_only_default_idp = "google"
+
     registration_allowed = false
 
     # ── D4b — the email IS the identity (owner decision 2026-08-24) ──────────────────────────────
@@ -351,6 +363,24 @@ inputs = {
         standard_flow_enabled        = true           # Authorization Code
         direct_access_grants_enabled = false
         pkce_code_challenge_method   = "S256"
+
+        # ── ADR-118 step 3 part 2: no password form on the PUBLIC login page ──────────────────────
+        #
+        # Binds THIS client to a generated browser flow containing exactly two executions:
+        #   auth-cookie                   ALTERNATIVE  (honours an existing SSO session)
+        #   identity-provider-redirector  ALTERNATIVE  (sends everyone else to Google/Facebook)
+        #
+        # Keycloak's built-in `browser` flow keeps the password form inside its `forms` subflow;
+        # this flow simply never declares that subflow. PR #89 already removed the REGISTRATION
+        # form via registration_allowed=false — this removes the LOGIN one.
+        #
+        # 🔴 DELIBERATELY NOT SET ON fitmate-admin-bff. Measured 2026-10-31: 18 of the realm's 20
+        # users are password-only fixtures and the admin BFF is the only door every administrator
+        # uses. reset_password_allowed is false and no mail relay exists (IN-61), so a lockout
+        # there has no recovery path.
+        #
+        # fitmate-e2e-test and admin-cli use DIRECT GRANT and never consult a browser flow at all.
+        social_only_login = true
         # ── Redirect URIs: the DEPLOYED dev origin, alongside the local one (spec 066 T088) ──────
         # Keycloak matches redirect_uri EXACTLY against this allowlist. Auth.js does not guess the
         # callback from X-Forwarded-* — it rewrites every request's origin to AUTH_URL
