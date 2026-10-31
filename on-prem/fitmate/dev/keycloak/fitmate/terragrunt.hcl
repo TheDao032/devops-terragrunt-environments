@@ -129,10 +129,31 @@ inputs = {
     # `registration_email_as_username`, set below.
     login_with_email_allowed = true
 
-    # D4 — self-service sign-up. Keycloak owns the CREDENTIAL step; the website completes the
-    # profile after first sign-in. That split is forced, not tidy: trainer sign-up needs ID-card
-    # images and certificate uploads, which Keycloak's registration page cannot collect.
-    registration_allowed = true
+    # D4 — self-service sign-up. 🔴 REVERSED BY ADR-118 (2026-10-31): was `true`.
+    #
+    # ADR-049 D4's ARCHITECTURE still holds — Keycloak owns the CREDENTIAL step and the website
+    # completes the profile after first sign-in, because trainer sign-up needs ID-card images and
+    # certificate uploads that Keycloak's registration page cannot collect. Only the CREDENTIAL
+    # TYPE changed: ADR-118 makes the public site social-only (Google live, Facebook live since
+    # 2026-10-31), so there is no password for a new user to choose.
+    #
+    # With this `true` the realm serves a /registrations page asking for Email, Password, Confirm
+    # password, First name and Last name — a form offering to create an account type the platform
+    # no longer supports. PR #168 already removed the matching promise from the website's own copy;
+    # this removes the form itself.
+    #
+    # 🔴 WHO IS UNAFFECTED — measured on dev 2026-10-31, not assumed:
+    #   • every EXISTING user, including all 18 password fixtures, logs in exactly as before;
+    #     this flag gates NEW self-registration only, never authentication.
+    #   • `fitmate-admin-bff` keeps the built-in `browser` flow and its password form.
+    #   • `fitmate-e2e-test` and `admin-cli` use DIRECT GRANT (directAccessGrantsEnabled=true,
+    #     standardFlowEnabled=false), so they never touch the browser flow at all.
+    #
+    # ⚠️ This does NOT remove the username/password form on the LOGIN page. That lives in
+    # Keycloak's built-in `browser` flow and needs a flow copy bound via
+    # authenticationFlowBindingOverrides — resources the shared module does not yet declare.
+    # Tracked separately; see 20-architecture/proposal-adr118-step3-kill-password-doors.md.
+    registration_allowed = false
 
     # ── D4b — the email IS the identity (owner decision 2026-08-24) ──────────────────────────────
     # Removes the separate username field from the registration form and stores the email as the
