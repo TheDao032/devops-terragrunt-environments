@@ -838,6 +838,34 @@ inputs = {
         client_id     = "1744447466628264"
         client_secret = get_env("FACEBOOK_CLIENTSECRET_DEV", "")
 
+        # 🔴 default_scopes IS REQUIRED HERE — leaving it unset BREAKS Facebook login.
+        #
+        # Measured live on dev 2026-10-31, clicking the new button on /login:
+        #
+        #   graph.facebook.com/oauth/authorize?...&scope=openid+profile+email
+        #   -> {"error":{"message":"Unsupported scope: 'profile'. Supported scopes:
+        #        offline_access user_payment_tokens","type":"OAuthException","code":100}}
+        #
+        # `keycloak_oidc_facebook_identity_provider` defaults default_scopes to the GENERIC
+        # OIDC triple "openid profile email" when the argument is omitted — the same value
+        # google sets deliberately on line 786. It is correct for google and INVALID at
+        # Facebook, which has no `profile` scope. Nothing in the module or the provider
+        # warns about it: the IdP creates cleanly, reports enabled, answers its broker
+        # endpoint with 400, and fails only at the moment a real user clicks the button.
+        #
+        # Isolated with a 4-way probe against Facebook's own endpoint — the ENDPOINT was
+        # never the problem, only the scope:
+        #
+        #   scope="openid profile email"   -> Unsupported scope: 'profile'
+        #   scope="email"                  -> accepted
+        #   scope="email public_profile"   -> accepted
+        #   scope="public_profile"         -> accepted
+        #
+        # `email public_profile` over bare `email`: public_profile carries name and
+        # picture, which Keycloak maps to firstName/lastName on first-broker-login. With
+        # email alone a new Facebook user arrives with no display name.
+        default_scopes = "email public_profile"
+
         # 🔴 trust_email = false — OPTION A, Dao's decision 2026-10-30, amending ADR-118.
         #
         # Google is trust_email = true under ADR-114 because its email_verified claim is
