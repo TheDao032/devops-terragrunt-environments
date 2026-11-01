@@ -62,7 +62,29 @@ inputs = {
       }
       roles = {
         "trainee_app_${local.environment}" = { login = true, password = dependency.vault-secrets.outputs.secrets["database/trainee/app/creds"]["password"], conn_limit = 12 }
-        "trainee_ro_${local.environment}"  = { login = true, password = dependency.vault-secrets.outputs.secrets["database/trainee/ro/creds"]["password"], conn_limit = 4 }
+        "trainee_ro_${local.environment}"  = { login = true, password = dependency.vault-secrets.outputs.secrets["database/trainee/ro/creds"]["password"], conn_limit = 10 }
+        # 🔴 SCRUM-550 — was 4, which DEADLOCKED every rolling update.
+        #
+        # A Postgres connection limit does not throttle, it REFUSES. During a
+        # rolling update Kubernetes runs the OLD and NEW pod at the same time:
+        # the old pod held all 4 read connections, the new pod's sqlx.Connect
+        # was refused, it panicked, so it never became Ready, so the old pod was
+        # never retired. Deleting the old pod does not help — its ReplicaSet
+        # recreates it in seconds. Only scaling the Deployment to 0 broke it,
+        # and that means a window with NO SERVICE.
+        #
+        # Measured 2026-11-01: this held a merged SECURITY fix out of dev for an
+        # hour while Deployment spec, readyReplicas 1/1 and ArgoCD all read
+        # green — they were describing a three-day-old pod.
+        #
+        # 10 = two pods x the app's read pool of 4 (trainee-service PR #92 makes
+        # that ceiling real and config-driven; it was a hardcoded 25) + 2 spare
+        # for the migrate Job. Both halves are required: the app ceiling alone
+        # does not help, because the refusal happens at connect time, before
+        # SetMaxOpenConns is ever reached.
+        #
+        # max_connections is 100 SERVER-WIDE across all 8 services, so this is
+        # deliberately the smallest number that fits a rollout, not a round one.
       }
       grants = [
         # Tables live in `public`, NOT `app`: search_path is "$user", public, so every migration
