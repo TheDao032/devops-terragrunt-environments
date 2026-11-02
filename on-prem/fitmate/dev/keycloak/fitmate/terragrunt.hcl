@@ -357,6 +357,53 @@ inputs = {
 
     clients = concat([
       {
+        # ── SCRUM-323: the native mobile app's OWN client ─────────────────────────────────────────
+        #
+        # A phone app CANNOT hold a secret — anyone can unzip the binary — so this is PUBLIC and
+        # relies on PKCE instead. It deliberately does NOT reuse fitmate-website's client, which is
+        # CONFIDENTIAL: sharing it would mean either shipping that secret inside the app or
+        # downgrading the website to public for everyone.
+        client_id                  = "fitmate-mobile"
+        name                       = "FITMate Mobile App"
+        access_type                = "PUBLIC"
+        standard_flow_enabled      = true
+        pkce_code_challenge_method = "S256"
+
+        # 🔴 FALSE ON PURPOSE. Direct access grant = username/password straight to the token
+        # endpoint. On a public client with no secret that would reintroduce exactly the password
+        # path Dao approved DELETING from the app (SCRUM-323), and it bypasses the browser flow
+        # below entirely — so social_only_login would be decorative while a password door stayed
+        # open on the same client.
+        direct_access_grants_enabled = false
+
+        # 🔴 WITHOUT THIS THE APP SHOWS A USERNAME/PASSWORD FORM.
+        #
+        # Measured 2026-11-02, before it shipped: a newly created Keycloak client inherits the
+        # built-in `browser` flow, whose `forms` subflow renders the password form. Enumerating the
+        # binding for EVERY fitmate client showed only fitmate-website carried the social-only
+        # override — the new mobile client did not.
+        #
+        # 🔑 ADR-118's social-only property is PER CLIENT, NOT PER REALM. Every new public client
+        # silently defaults to password-capable. Check this on any future public-platform client;
+        # inspecting only the client you just created will not reveal it.
+        social_only_login = true
+
+        # Deep links, not URLs: the OS hands the redirect back to the app via a registered scheme.
+        # iOS registers me.fitmate.app (ios/Runner/Info.plist), Android registers fitmate
+        # (AndroidManifest). Keycloak matches redirect_uri EXACTLY, and a mismatch fails at the very
+        # LAST step of an otherwise successful login — after the user has already authenticated —
+        # which reads as "the app is broken" rather than "one string disagrees".
+        #
+        # Both schemes are listed because the two platforms register different ones; dropping either
+        # breaks that platform only, which is the kind of asymmetry that survives a smoke test.
+        valid_redirect_uris = [
+          "me.fitmate.app://oauth2redirect",
+          "me.fitmate.app://oauth2redirect/*",
+          "fitmate://oauth2redirect",
+        ]
+        web_origins = []
+      },
+      {
         client_id                    = "fitmate-website"
         name                         = "FITMate Website (BFF)"
         access_type                  = "CONFIDENTIAL" # issues a client_secret (Auth.js BFF holds it)
@@ -803,8 +850,8 @@ inputs = {
         # stock flow, so 'Confirm link existing account' is still REQUIRED: the user clicks
         # through a screen naming the existing account. Only the unsatisfiable email
         # challenge is removed. Facebook MUST NOT inherit this — its email proof is weaker.
-        trust_email    = true
-        sync_mode      = "IMPORT"
+        trust_email = true
+        sync_mode   = "IMPORT"
       },
       # ── Facebook: DEFERRED to a post-launch phase (2026-08-23, owner's call) ────────────────────
       # Removed rather than left disabled, because the Meta app it referenced (1507947667436834) has
@@ -886,8 +933,8 @@ inputs = {
         # 🔴 DO NOT flip this to true to 'fix' a stuck user. The real fix is a working mail
         # relay (Option C, ticket filed 2026-10-30) — which stg and prod need anyway, since
         # resetPasswordAllowed is false for exactly the same reason.
-        trust_email    = false
-        sync_mode      = "IMPORT"
+        trust_email = false
+        sync_mode   = "IMPORT"
       },
     ]
   }
