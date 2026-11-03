@@ -985,9 +985,29 @@ inputs = {
         display_name = "Apple"
         gui_order    = "3"
 
-        # Same social-only first-broker-login flow as google/facebook, so an Apple first login
-        # lands in the identical account-creation path rather than the built-in flow.
-        first_broker_login_flow_alias = "fitmate-social-first-broker-login"
+        # "first broker login" — the BUILT-IN flow, which is exactly what google and facebook
+        # use. Verified by payload, not assumed:
+        #   kcadm get identity-provider/instances/google   -> "first broker login"
+        #   kcadm get identity-provider/instances/facebook -> "first broker login"
+        #
+        # 🔴 THIS FIELD PREVIOUSLY SAID "fitmate-social-first-broker-login", A FLOW THAT DOES NOT
+        # EXIST. The apply failed with a bare 500 from Keycloak:
+        #   error sending POST .../identity-provider/instances: 500 Internal Server Error
+        #   {"error":"unknown_error","error_description":"For more on this error consult the
+        #    server log."}
+        # The real cause was only in the server log:
+        #   ModelException: No available authentication flow with alias: fitmate-social-...
+        #
+        # The mistake was conflating two different things that both say "social only":
+        #   "fitmate social only browser"  = a BROWSER flow, bound to CLIENTS (website/mobile)
+        #   "first broker login"           = the FIRST-BROKER-LOGIN flow, bound to IdPs
+        # Only the realm's actual flow list settles it:
+        #   kcadm get authentication/flows -r fitmate-dev --fields alias
+        # which returns exactly: browser, direct grant, registration, reset credentials, clients,
+        # "first broker login", docker auth, "fitmate social only browser". There is no
+        # first-broker-login flow of our own, so inventing a name for one produced a 500 rather
+        # than a validation error.
+        first_broker_login_flow_alias = "first broker login"
       },
     ]
   }
