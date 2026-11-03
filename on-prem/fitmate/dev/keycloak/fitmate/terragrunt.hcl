@@ -936,6 +936,59 @@ inputs = {
         trust_email = false
         sync_mode   = "IMPORT"
       },
+
+      # ── Sign in with Apple ──────────────────────────────────────────────────────────────
+      #
+      # 🔴 REQUIRES the Keycloak image to already carry the Apple extension
+      # (dev_173_f6c3636+, pinned in shared/ops-tools). provider_id "apple" does not exist
+      # against stock Keycloak, so this apply FAILS against an older image. The two stacks
+      # have no dependency link — the order is human-enforced: ops-tools FIRST, realm second.
+      #
+      # MANDATORY FOR iOS: App Store Guideline 4.8 requires Apple sign-in once an app offers
+      # any other third-party login, and we offer Google and Facebook. Not an optional extra.
+      {
+        alias     = "apple"
+        client_id = "me.fitmate.app.auth" # the Services ID, NOT the app bundle id
+
+        # 🔴 THIS IS THE RAW .p8 PRIVATE KEY, NOT A CLIENT SECRET STRING.
+        #
+        # Apple requires the client secret to be an ES256 JWT signed with this key. The
+        # extension mints a fresh one per login, so the value supplied here is the key itself.
+        # Stored in Vault at fitmate/dev/apple/signin (key_id 956U7DB9GM).
+        #
+        # ⚠️ AN EMPTY VALUE DOES NOT MEAN "LEAVE ALONE". The module SKIPS any provider whose
+        # client_secret is blank (module locals.tf:52 filters them out). For a provider already
+        # in state that is a DESTROY — facebook was wiped three times exactly this way. Confirm
+        # APPLE_P8_DEV is exported before applying, and read
+        # `terragrunt output identity_providers_skipped` afterwards to prove it was not skipped.
+        client_secret = get_env("APPLE_P8_DEV", "")
+
+        team_id = "TYP34H49YY"
+        key_id  = "956U7DB9GM"
+
+        # Apple's scopes are "name email" — NOT the OIDC-standard "openid profile email".
+        # Apple has no userinfo endpoint (claims ride in the id_token) and sends `name` ONLY on
+        # a user's first authorization, never again. This is the same defect class that broke
+        # Facebook with "Unsupported scope: 'profile'": a generic OIDC default that is invalid
+        # at a specific provider, with nothing warning about it.
+        default_scopes = "name email"
+
+        # 🔴 FALSE, for a different reason than facebook's.
+        #
+        # Apple lets a user hide their real address behind a per-app relay
+        # (xxxxx@privaterelay.appleid.com). Deliverable, but NOT proof of control over any
+        # personal mailbox — and a user may supply an address Apple never verified. true would
+        # auto-link an Apple login to an existing FITMate account by email, the takeover path
+        # ADR-118 Option A exists to prevent. The extension's own README recommends the same.
+        trust_email = false
+
+        display_name = "Apple"
+        gui_order    = "3"
+
+        # Same social-only first-broker-login flow as google/facebook, so an Apple first login
+        # lands in the identical account-creation path rather than the built-in flow.
+        first_broker_login_flow_alias = "fitmate-social-first-broker-login"
+      },
     ]
   }
 
