@@ -547,8 +547,34 @@ inputs = {
     helm = {
       chart_version = "88.5.2"
 
-      namespace  = "monitoring"
-      repository = "https://prometheus-community.github.io/helm-charts"
+      namespace = "monitoring"
+      # ── OCI, not the HTTPS chart repo (fixes an apply failure, 2026-11-03) ──────────────────
+      #
+      # `terragrunt run --all apply` failed here with:
+      #   Error: Error locating chart
+      #   Unable to locate chart kube-prometheus-stack: looks like
+      #   "https://prometheus-community.github.io/helm-charts" is not a valid chart
+      #   repository or cannot be reached: context deadline exceeded (Client.Timeout or
+      #   context cancellation while reading body)
+      #
+      # 🔑 The repo is NOT unreachable — it is that slow. Measured 2026-11-03:
+      #     GET .../helm-charts/index.yaml  ->  HTTP 200, 5,524,480 bytes, 60.03 s
+      #   The provider must download a 5.3 MB index listing every chart and version in the
+      #   prometheus-community repo just to resolve one chart, and gives up reading the body
+      #   first. Raising a timeout would only widen the window on a 5.3 MB download over a
+      #   ~90 KB/s link; it does not remove the download.
+      #
+      # OCI resolves the chart by reference — no index at all. Measured same session:
+      #     helm pull oci://ghcr.io/prometheus-community/charts/kube-prometheus-stack
+      #       --version 88.5.2   ->  894,933 bytes, 19 s
+      #       Digest: sha256:3c44dce9491701d6b094c0640114c48cb0646f8966caee7c24aabbfbd56090ca
+      #   i.e. 6x less data and no full-repo index. Published by prometheus-community
+      #   themselves ("OCI artifacts of all Prometheus Helm charts are available in ghcr.io"
+      #   — their own helm-charts README), so this is the same publisher, not a mirror.
+      #
+      # NOT a new pattern here: redis and kafka in this very file already pull from
+      # oci://registry-1.docker.io/bitnamicharts (lines ~456 and ~497).
+      repository = "oci://ghcr.io/prometheus-community/charts"
       # ⚠️ release_name MUST equal the upstream CHART name. shared/helm does
       #   chart = coalesce(local.chart, var.name)
       # so with no local chart, var.name IS the chart pulled from the repo — and it also selects the
