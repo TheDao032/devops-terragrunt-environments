@@ -199,7 +199,20 @@ inputs = {
       # ⚠️ THIS IS NOT A ONE-CHANGE DEPLOY. It carries a month of accumulated theme work
       # that has never run anywhere, so verify the FUNNEL (/register -> role tap -> Keycloak
       # hand-off) after applying, not just the copy.
-      image = "ghcr.io/fitmate-platform/fitmate-keycloak:dev_167_8989510"
+      # 2026-11-03: dev_167_8989510 -> dev_173_f6c3636. Carries the Apple identity provider
+      # extension (website PR #173). Keycloak ships NO Apple provider — measured on this very
+      # server: 17 provider types offered, `apple` absent — so Apple sign-in is impossible
+      # without this image. Registration proven in CI's own build log, not inferred:
+      #   KC-SERVICES0047: apple-username-template-mapper (at.klausbetz.provider...)
+      #   KC-SERVICES0047: apple-user-attribute-mapper    (at.klausbetz.provider...)
+      # and the pulled arm64 image carries the JAR as 1000:0 0644 (readable by uid 1000 —
+      # `ADD` from a URL writes root:root 0600 by default, which made `kc.sh build` log
+      # "Failed to read" and still EXIT 0).
+      #
+      # 🔴 THIS IMAGE MUST BE RUNNING BEFORE the dev realm's apple identity_provider applies.
+      # provider_id "apple" does not exist against stock Keycloak and the realm apply will
+      # fail. Terraform cannot see this dependency — the realm is a different stack.
+      image = "ghcr.io/fitmate-platform/fitmate-keycloak:dev_173_f6c3636"
       #
       # Only if the GHCR package is PRIVATE. The Secret must already exist in the `keycloak`
       # namespace — nothing here creates it (the existing `ghcr-pull` Secrets live in the
