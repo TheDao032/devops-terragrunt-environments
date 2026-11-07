@@ -15,8 +15,46 @@ terraform {
   source = "../../../../../devops-terraform-modules//cloud/cloudflare-dns"
 }
 
-include "root" {
-  path = find_in_parent_folders("root.hcl")
+# Cloudflare-only stack — deliberately does NOT include root.hcl, and generates its own scoped
+# provider set, exactly as dev/cloudflare-tunnel does (see its comment at line 22).
+#
+# 🔴 TWO REASONS, BOTH LEARNED THE HARD WAY ON 2026-11-07:
+#
+# 1. root.hcl's generated providers need a REACHABLE CLUSTER. This unit touches nothing but
+#    Cloudflare, and the cluster is frequently down; including root made this unit fail for a
+#    reason unrelated to DNS.
+# 2. Without a generated versions.tf, Terraform guesses the provider namespace and fails with
+#      "provider registry does not have a provider named
+#       registry.terraform.io/hashicorp/cloudflare ... Did you intend to use cloudflare/cloudflare?"
+#    The MODULE declares no required_providers — that is this repo's convention, and it is the
+#    UNIT's job to generate them.
+generate "versions" {
+  path      = "versions.tf"
+  if_exists = "overwrite_terragrunt"
+  contents  = <<-EOF
+    terraform {
+      required_version = ">= 1.11.2, < 2.0.0"
+      required_providers {
+        cloudflare = {
+          source  = "cloudflare/cloudflare"
+          version = "~> 5.23"
+        }
+      }
+    }
+  EOF
+}
+
+# Read straight from the environment rather than from an env.hcl local: shared/env.hcl has no
+# cloudflare_api_token (only dev/env.hcl does), and dev/env.hcl itself resolves it with exactly
+# this get_env call — so this is the same value from the same source, not a second mechanism.
+generate "provider_cloudflare" {
+  path      = "provider-cloudflare.tf"
+  if_exists = "overwrite_terragrunt"
+  contents  = <<-EOF
+    provider "cloudflare" {
+      api_token = "${get_env("CLOUDFLARE_API_TOKEN", "")}"
+    }
+  EOF
 }
 
 locals {
