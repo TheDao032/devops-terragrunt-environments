@@ -212,7 +212,7 @@ inputs = {
       # 🔴 THIS IMAGE MUST BE RUNNING BEFORE the dev realm's apple identity_provider applies.
       # provider_id "apple" does not exist against stock Keycloak and the realm apply will
       # fail. Terraform cannot see this dependency — the realm is a different stack.
-      image = "ghcr.io/fitmate-platform/fitmate-keycloak:dev_173_f6c3636"
+      image = "ghcr.io/fitmate-platform/fitmate-keycloak:dev_176_95368ea"
       #
       # Only if the GHCR package is PRIVATE. The Secret must already exist in the `keycloak`
       # namespace — nothing here creates it (the existing `ghcr-pull` Secrets live in the
