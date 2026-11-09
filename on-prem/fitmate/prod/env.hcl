@@ -65,6 +65,35 @@ locals {
     "trainee/ghcr-pull" = { username = local.backend_github_username, token = local.backend_github_token }
     "website/ghcr-pull" = { username = local.backend_github_username, token = local.backend_github_token }
 
+    # ── website server-side auth secrets (ESO -> AUTH_SECRET / AUTH_KEYCLOAK_SECRET) ─────────
+    #
+    # The prod website overlay extracts BOTH of these (apps/website/prod/values.yaml:139-143).
+    # Without them ESO reports
+    #     error processing spec.dataFrom[0].extract, err: Secret does not exist
+    # and the pod never gets its env, so even the static /privacy and /terms pages cannot be
+    # served - Auth.js is wired into the request path, so a missing AUTH_SECRET is not confined
+    # to the sign-in routes.
+    #
+    # AUTH_SECRET is a generated signing key, identical in shape to dev/env.hcl:100. It is
+    # MANAGED and shared, never per-pod: Auth.js encrypts the session cookie with it, so pods
+    # holding different keys cannot read each other's sessions and it must survive rollouts.
+    "website/session" = { AUTH_SECRET = "{ _RANDOM_ = 44 }" }
+
+    # 🔴 PLACEHOLDER, AND DELIBERATELY SO. AUTH_KEYCLOAK_SECRET is the client secret of the
+    # website's client in the PROD Keycloak realm - and that realm DOES NOT EXIST yet
+    # (auth.fitmate.me does not resolve to anything; prod Keycloak has never been deployed).
+    #
+    # There is therefore no true value to put here. A well-formed placeholder lets the pod boot
+    # and serve the prerendered pages this environment exists for today; sign-in at fitmate.me
+    # is ALREADY impossible for want of a realm, so this neither creates nor hides a regression.
+    #
+    # ⚠️ THIS IS NOT A WORKING CREDENTIAL. When the prod realm is created, replace this with the
+    # real client secret in the same apply that deploys the realm - do not let a green pod with
+    # a placeholder secret be mistaken for working prod authentication. That is exactly the
+    # "green status attesting to the wrong proposition" shape: ESO will report SecretSynced=True
+    # over a value that can never authenticate.
+    "website/creds" = { AUTH_KEYCLOAK_SECRET = "PLACEHOLDER-no-prod-realm-yet" }
+
     # ── PostgreSQL superuser (tf_admin) — ONE PG server backs all envs, so this is the same stable
     #    value everywhere (also in shared/env.hcl for the keycloak DB). Read by this env's database units.
     "database/superuser/creds" = {
